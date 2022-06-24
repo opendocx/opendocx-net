@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OpenDocx.Templater\OpenDocx.Templater.csproj" />
+    <ProjectReference Include="..\OpenDocx\OpenDocx.csproj" />
   </ItemGroup>
 
   <ItemGroup>

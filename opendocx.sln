@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.271
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx.Templater", "OpenDocx.Templater\OpenDocx.Templater.csproj", "{9ACB9FAA-83B1-4645-AF23-A3407A9166B9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx", "OpenDocx\OpenDocx.csproj", "{9ACB9FAA-83B1-4645-AF23-A3407A9166B9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx.Templater.Tests", "OpenDocx.Templater.Tests\OpenDocx.Templater.Tests.csproj", "{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx.Tests", "OpenDocx.Tests\OpenDocx.Tests.csproj", "{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
