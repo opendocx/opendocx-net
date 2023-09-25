@@ -13,6 +13,6 @@
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.DotNet.InternalAbstractions" Version="1.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="7.0.0" />
-    <PackageReference Include="OpenXmlPowerTools-Net6" Version="4.6.24-beta5" />
+    <PackageReference Include="OpenXmlPowerTools-Net6" Version="4.6.24" />
   </ItemGroup>
 </Project>
