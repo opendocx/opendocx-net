@@ -43,7 +43,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
@@ -79,7 +79,7 @@ namespace OpenDocxTemplater.Tests
         {
             CompileTemplate("nested.docx");
 
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo docxGenTemplate = new FileInfo(Path.Combine(destDir.FullName, "nested.docxgen.docx"));
 
             WmlDocument afterCompiling = new WmlDocument(docxGenTemplate.FullName);
@@ -102,7 +102,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
@@ -137,7 +137,7 @@ namespace OpenDocxTemplater.Tests
             string name = "SmartTags.docx"; // this document has an invalid smartTag element (apparently inserted by 3rd party software)
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo docx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string filePath = outputDocx.FullName;
             string outPath = Path.Combine(destDir.FullName, "SmartTags-Removed.docx");
@@ -173,7 +173,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
@@ -210,7 +210,7 @@ namespace OpenDocxTemplater.Tests
         // {
         //     DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
         //     FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-        //     DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+        //     DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
         //     FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
         //     string templateName = outputDocx.FullName;
         //     templateDocx.CopyTo(templateName, true);
@@ -233,7 +233,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
@@ -282,7 +282,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
@@ -301,7 +301,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo sourceTemplateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo testDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo testDir = new DirectoryInfo("../../../../test/history/");
             FileInfo testTemplateDocx = new FileInfo(Path.Combine(testDir.FullName, sourceTemplateDocx.Name));
             string templateName = testTemplateDocx.FullName;
             sourceTemplateDocx.CopyTo(templateName, true);
@@ -317,7 +317,7 @@ namespace OpenDocxTemplater.Tests
 
         private string GetTestOutput(string outName)
         {
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, outName));
             return outputDocx.FullName;
         }
@@ -344,7 +344,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/dot-net-results");
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, "conv_" + name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
