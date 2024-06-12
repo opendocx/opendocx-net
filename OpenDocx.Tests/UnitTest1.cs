@@ -47,7 +47,7 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName);
             Assert.True(File.Exists(extractResult.ExtractedFields));
             Assert.True(File.Exists(extractResult.TempTemplate));
             // check for valid JSON syntax
@@ -113,7 +113,7 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName);
             Assert.True(File.Exists(extractResult.ExtractedFields));
             Assert.True(File.Exists(extractResult.TempTemplate));
 
@@ -176,7 +176,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("Married RLT Plain.docx")]
         [InlineData("text_field_formatting.docx")]
         [InlineData("kMANT.docx")]
-        public FieldExtractResult FieldExtractor(string name)
+        public FieldExtractResult TextExtractFields(string name)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
@@ -184,7 +184,7 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName);
             Assert.True(File.Exists(extractResult.ExtractedFields));
             Assert.True(File.Exists(extractResult.TempTemplate));
             return extractResult;
@@ -193,7 +193,7 @@ namespace OpenDocxTemplater.Tests
         [Fact]
         public void RenderedPageBreakMasksDelimiters()
         {
-            var extractResult = FieldExtractor("rend_page_break_in_delim.docx");
+            var extractResult = TextExtractFields("rend_page_break_in_delim.docx");
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
             var val = JsonConvert.DeserializeObject<JArray>(json);
@@ -225,7 +225,7 @@ namespace OpenDocxTemplater.Tests
         //     options.templateFile = templateName;
         //     options.removeCustomProperties = true;
         //     options.keepPropertyNames = new object[] { "UpdateFields" };
-        //     var od = new OpenDocx.FieldExtractor();
+        //     var od = new TextExtractFields();
         //     var extractResult = await od.ExtractFieldsAsync(options);
         //     Assert.True(File.Exists(extractResult.ExtractedFields));
         //     Assert.True(File.Exists(extractResult.TempTemplate));
@@ -247,7 +247,7 @@ namespace OpenDocxTemplater.Tests
             options.templateFile = templateName;
             options.fieldDelimiters = delims;
             options.removeCustomProperties = true;
-            var od = new OpenDocx.FieldExtractor();
+            var od = new FieldExtractor();
             var extractResult = await od.ExtractFieldsAsync(options);
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
@@ -277,7 +277,7 @@ namespace OpenDocxTemplater.Tests
                 destinationTemplatePath, TemplateFormat.TextFieldSourceDocx, fieldMap2,
                 "HotDocs", "HD");
             Assert.True(File.Exists(destinationTemplatePath));
-            // var odv = new OpenDocx.Validator();
+            // var odv = new Validator();
             // var vr = odv.ValidateDocument(destinationTemplatePath);
             // Assert.False(vr.HasErrors, vr.ErrorList);
         }
@@ -289,7 +289,7 @@ namespace OpenDocxTemplater.Tests
         public async void FieldExtractorLiteAltSyntaxAsync(string name, string delims)
         {
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
-            var json = OpenDocx.FieldExtractor.ExtractFieldsOnly(bytes, delims);
+            var json = FieldExtractor.ExtractFieldsOnly(bytes, delims);
             Assert.False(string.IsNullOrWhiteSpace(json));
             Assert.True(IsValidJson(json));
             //var val = JsonConvert.DeserializeObject<JArray>(json);
@@ -314,7 +314,7 @@ namespace OpenDocxTemplater.Tests
             templateDocx.CopyTo(templateName, true);
             dynamic options = new ExpandoObject();
             options.templateFile = templateName;
-            var od = new OpenDocx.FieldExtractor();
+            var od = new FieldExtractor();
             var extractResult = await od.ExtractFieldsAsync(options);
             Assert.True(File.Exists(extractResult.TempTemplate));
             // ensure interim template (which SHOULD no longer have task panes) still validates
@@ -354,7 +354,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("xmlerror.docx", "xmlerror.xml", "xmlerror-assembled.docx")]
         public async Task AssembleDocument(string name, string data, string outName)
         {
-            var assembler = new OpenDocx.Assembler();
+            var assembler = new Assembler();
             var assembleResult = await assembler.AssembleDocAsync(
                 GetTestTemplate(name),
                 GetTestXmlData(data),
@@ -374,10 +374,10 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, "conv_" + name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName);
             Assert.True(File.Exists(extractResult.TempTemplate));
 
-            var remover = new OpenDocx.CCRemover();
+            var remover = new CCRemover();
             var compileResult = remover.RemoveCCs(templateName, extractResult.TempTemplate);
             Assert.False(compileResult.HasErrors);
             Assert.True(File.Exists(compileResult.DocxGenTemplate));
@@ -392,7 +392,7 @@ namespace OpenDocxTemplater.Tests
         public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName)
         {
             var mainData = GetTestXmlData(data);
-            var assembler = new OpenDocx.Assembler();
+            var assembler = new Assembler();
             List<Source> sources = new List<Source>()
             {
                 new TemplateSource(GetTestTemplate(insert), mainData, "inserted"),
@@ -412,7 +412,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_one.docx", "addins_one_one_added(updated).docx")]
         public async Task AddTaskPane(string name, string outName)
         {
-            var embedder = new OpenDocx.TaskPaneEmbedder();
+            var embedder = new TaskPaneEmbedder();
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
             var modBytes = embedder.EmbedTaskPane(
               bytes,
@@ -437,7 +437,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_none.docx", "addins_none_removed.docx")]
         public async Task RemoveTaskPane(string name, string outName)
         {
-            var embedder = new OpenDocx.TaskPaneEmbedder();
+            var embedder = new TaskPaneEmbedder();
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
             var modBytes = embedder.RemoveTaskPane(bytes, "{635BF0CD-42CC-4174-B8D2-6D375C9A759E}");
             var outPath = GetTestOutput(outName);
@@ -474,13 +474,13 @@ namespace OpenDocxTemplater.Tests
         //}
 
         //[Fact]
-        //public void FieldExtractor()
+        //public void TextExtractFields()
         //{
         //    string name = "TestNest.docx";
         //    DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/");
         //    FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
 
-        //    var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateDocx.FullName);
+        //    var extractResult = TextExtractFields.ExtractFields(templateDocx.FullName);
         //    Assert.True(File.Exists(extractResult.ExtractedFields));
         //    Assert.True(File.Exists(extractResult.TempTemplate));
         //}
@@ -492,7 +492,7 @@ namespace OpenDocxTemplater.Tests
         //    DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/");
         //    FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
 
-        //    var extractResult = OpenDocx.FieldExtractor.ExtractFields(templateDocx.FullName);
+        //    var extractResult = TextExtractFields.ExtractFields(templateDocx.FullName);
         //    Assert.True(File.Exists(extractResult.ExtractedFields));
         //    Assert.True(File.Exists(extractResult.TempTemplate));
         //}
