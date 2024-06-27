@@ -3,7 +3,12 @@ using System.Collections.Generic;
 
 namespace OpenDocx
 {
-    public class FieldTransformInfo
+    public interface IFieldTransformInfo
+    {
+        public string Content { get; }
+    }
+
+    public class FieldTransformInfo : IFieldTransformInfo
     {
         public string fieldType;
         public string atomizedExpr;

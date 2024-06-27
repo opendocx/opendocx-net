@@ -13,7 +13,7 @@ public class FieldReplacement
             this.comment = comment;
         }
     }
-    public FieldReplacement(FieldTransformInfo field, string comment = null) : this(field.Content, comment) {}
+    public FieldReplacement(IFieldTransformInfo field, string comment = null) : this(field.Content, comment) {}
 
     public override string ToString() {
         return this.content;

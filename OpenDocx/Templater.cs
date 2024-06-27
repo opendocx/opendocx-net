@@ -13,13 +13,14 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
 using Newtonsoft.Json;
+using OpenXmlPowerTools;
 
 namespace OpenDocx
 {
-    public class Templater
+    public static class Templater
     {
         #pragma warning disable CS1998
-        public async Task<object> CompileTemplateAsync(dynamic input)
+        public static async Task<object> CompileTemplateAsync(dynamic input)
         {
             var preProcessedTemplateFile = (string)input.templateFile;
             var originalTemplateFile = (string)input.originalTemplateFile;
@@ -29,7 +30,7 @@ namespace OpenDocx
         }
         #pragma warning restore CS1998
 
-        public CompileResult CompileTemplate(string originalTemplateFile, string preProcessedTemplateFile, string parsedFieldInfoFile)
+        public static CompileResult CompileTemplate(string originalTemplateFile, string preProcessedTemplateFile, string parsedFieldInfoFile)
         {
             string json = File.ReadAllText(parsedFieldInfoFile);
             var xm = JsonConvert.DeserializeObject<FieldTransformIndex>(json);
@@ -43,6 +44,18 @@ namespace OpenDocx
             var errors = TemplateTransformer.TransformTemplate(preProcessedTemplateFile,
                 destinationTemplatePath, TemplateFormat.ObjectDocx, fieldMap);
             return new CompileResult(destinationTemplatePath, errors);
+        }
+
+        public static TemplateTransformResult CompileTemplate(byte[] preProcessedTemplate, Dictionary<string, ParsedField> fieldDict)
+        {
+            // translate fieldDict into a simple Dictionary<string, FieldReplacement> so we can use TemplateTransformer
+            var fieldMap = new FieldReplacementIndex();
+            foreach (var fieldId in fieldDict.Keys)
+            {
+                fieldMap[fieldId] = new FieldReplacement(fieldDict[fieldId]);
+            }
+            return TemplateTransformer.TransformTemplate(preProcessedTemplate,
+                TemplateFormat.ObjectDocx, fieldMap);
         }
     }
 }

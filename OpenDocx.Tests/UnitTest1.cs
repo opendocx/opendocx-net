@@ -11,7 +11,9 @@ using OpenDocx;
 using Xunit;
 using Xunit.Abstractions;
 using System.Dynamic;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
 
 namespace OpenDocxTemplater.Tests
@@ -23,6 +25,21 @@ namespace OpenDocxTemplater.Tests
         public Tests(ITestOutputHelper output)
         {
             this.output = output;
+        }
+
+        private TemplateTransformResult DoCompileTemplate(string sourceTemplatePath)
+        {
+            var normalizeResult = FieldExtractor.NormalizeTemplate(File.ReadAllBytes(sourceTemplatePath));
+
+            var fieldList = JsonNode.Parse(normalizeResult.ExtractedFields);
+            var ast = OpenDocx.FieldParser.ParseContentArray(fieldList as JsonArray);
+            // create a map from field ID to nodes in the AST, which before would have been saved in fieldDictPath = templatePath + 'obj.fields.json'
+            var fieldDict = new Dictionary<string, ParsedField>();
+            var atoms = new FieldExprNamer();
+            OpenDocx.FieldParser.BuildFieldDictionary(ast, fieldDict, atoms); // this also atomizes expressions in fields
+            // note: it ALSO mutates ast, adding atom annotations for expressions
+
+            return Templater.CompileTemplate(normalizeResult.NormalizedTemplate, fieldDict);
         }
 
         [Theory]
@@ -42,22 +59,32 @@ namespace OpenDocxTemplater.Tests
         public void CompileTemplate(string name)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
-            FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
-            FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
-            string templateName = outputDocx.FullName;
-            templateDocx.CopyTo(templateName, true);
-            var extractResult = FieldExtractor.ExtractFields(templateName);
-            Assert.True(File.Exists(extractResult.ExtractedFields));
-            Assert.True(File.Exists(extractResult.TempTemplate));
-            // check for valid JSON syntax
-            Assert.True(IsValidJsonFile(extractResult.ExtractedFields));
+            var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
+            var transformResult = DoCompileTemplate(sourceTemplatePath);
+            Assert.False(transformResult.HasErrors);
 
-            var templater = new Templater();
-            // warning... the file 'templateName + "obj.fields.json"' must have been created by node.js external to this test. (hack/race)
-            var compileResult = templater.CompileTemplate(templateName, extractResult.TempTemplate, templateName + "obj.fields.json");
-            Assert.False(compileResult.HasErrors);
-            Assert.True(File.Exists(compileResult.DocxGenTemplate));
+            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
+            File.WriteAllBytes(Path.Combine(destDir.FullName, name + "gen.docx"), transformResult.Bytes);
+
+            //string templateName = outputDocx.FullName;
+
+            //FileInfo templateDocx = new FileInfo(sourceTemplatePath);
+            //templateDocx.CopyTo(templateName, true);
+            //var extractResult = FieldExtractor.ExtractFields(templateName);
+            //Assert.True(File.Exists(extractResult.ExtractedFields));
+            //Assert.True(File.Exists(extractResult.TempTemplate));
+            //// check for valid JSON syntax
+            //Assert.True(IsValidJsonFile(extractResult.ExtractedFields));
+
+            ////// use the yatte engine to parse all the fields, creating an AST for the template
+            ////const ast = yatte.Engine.parseContentArray(fieldList)
+            //// test .NET-based conversion of extracted fields into field list!
+            //// now read extract field JSON
+            ////var fieldList = JsonConvert.DeserializeObject<JArray>(File.ReadAllText(extractResult.ExtractedFields)); // newtonsoft json
+            //// warning... the file 'templateName + "obj.fields.json"' must have been created by node.js external to this test. (hack/race)
+            //var compileResult = Templater.CompileTemplate(templateName, extractResult.TempTemplate, templateName + "obj.fields.json");
+            //Assert.False(compileResult.HasErrors);
+            //Assert.True(File.Exists(compileResult.DocxGenTemplate));
         }
 
         private Boolean IsValidJsonFile(string filePath) {
@@ -72,7 +99,7 @@ namespace OpenDocxTemplater.Tests
                 { // containing CR characters suggests bad line breaks
                     return false;
                 }
-                var val = JsonConvert.DeserializeObject<object>(json);
+                var val = Newtonsoft.Json.JsonConvert.DeserializeObject<object>(json);
                 return true;
             }
             catch (Exception)
@@ -97,31 +124,20 @@ namespace OpenDocxTemplater.Tests
         }
 
         [Theory]
-        //[InlineData("MissingEndIfPara.docx")]
-        //[InlineData("MissingEndIfRun.docx")]
-        //[InlineData("MissingIfRun.docx")]
-        //[InlineData("MissingIfPara.docx")]
-        [InlineData("NonBlockIf.docx")]
-        [InlineData("NonBlockEndIf.docx")]
-        [InlineData("kMANT.docx")]
-        //[InlineData("crasher.docx")]
-        public void CompileErrors(string name)
+        [InlineData("MissingEndIfPara.docx", "The If in field 1 has no matching EndIf")]
+        [InlineData("MissingEndIfRun.docx", "The If in field 1 has no matching EndIf")]
+        [InlineData("MissingIfRun.docx", "The EndIf in field 2 has no matching If")]
+        [InlineData("MissingIfPara.docx", "The EndIf in field 2 has no matching If")]
+        [InlineData("NonBlockIf.docx", "The If in field 1 has no matching EndIf")]
+        [InlineData("NonBlockEndIf.docx", "The EndIf in field 3 has no matching If")]
+        [InlineData("kMANT.docx", "The EndIf in field 3 has no matching If")]
+        //[InlineData("crasher.docx", "")]
+        public void CompileErrors(string name, string message)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
-            FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
-            DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
-            FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
-            string templateName = outputDocx.FullName;
-            templateDocx.CopyTo(templateName, true);
-            var extractResult = FieldExtractor.ExtractFields(templateName);
-            Assert.True(File.Exists(extractResult.ExtractedFields));
-            Assert.True(File.Exists(extractResult.TempTemplate));
-
-            var templater = new Templater();
-            // warning... the file 'templateName + "obj.fields.json"' must have been created by node.js external to this test. (hack/race)
-            var compileResult = templater.CompileTemplate(templateName, extractResult.TempTemplate, templateName + "obj.fields.json");
-            Assert.True(compileResult.HasErrors);
-            Assert.True(File.Exists(compileResult.DocxGenTemplate));
+            var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
+            var ex = Assert.Throws<Exception>(() => DoCompileTemplate(sourceTemplatePath));
+            Assert.Equal(message, ex.Message);
         }
 
         [Theory]
@@ -196,7 +212,7 @@ namespace OpenDocxTemplater.Tests
             var extractResult = TextExtractFields("rend_page_break_in_delim.docx");
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
-            var val = JsonConvert.DeserializeObject<JArray>(json);
+            var val = Newtonsoft.Json.JsonConvert.DeserializeObject<JArray>(json);
             // (Past failure was: a "last rendered page break" in the Word markup, situated between the closing
             // ] and } of a field delimiter situated just at a page break, prevented the field extractor from
             // recognizing the field, leading to errors in processing/compiling the template.)
@@ -251,7 +267,7 @@ namespace OpenDocxTemplater.Tests
             var extractResult = await od.ExtractFieldsAsync(options);
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
-            var val = JsonConvert.DeserializeObject<JArray>(json);
+            var val = Newtonsoft.Json.JsonConvert.DeserializeObject<JArray>(json);
             // sub in field number tokens to test replacement for CCRemover
             var fieldMap = new FieldReplacementIndex();
             foreach (JObject obj in FlattenFields(val)) {
@@ -363,6 +379,11 @@ namespace OpenDocxTemplater.Tests
             Assert.True(File.Exists(assembleResult.Document));
         }
 
+        public void LogicToJson()
+        {
+
+        }
+
         [Theory]
         [InlineData("SimpleWill.docx")]
         [InlineData("loandoc_example.docx")]
@@ -452,8 +473,7 @@ namespace OpenDocxTemplater.Tests
         //    DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/");
         //    FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
 
-        //    var templater = new Templater();
-        //    //var compileResult = templater.CompileTemplate(templateDocx.FullName);
+        //    //var compileResult = Templater.CompileTemplate(templateDocx.FullName);
         //    //Assert.False(compileResult.HasErrors);
         //    //Assert.True(File.Exists(compileResult.DocxGenTemplate));
         //    //Assert.True(File.Exists(compileResult.ExtractedLogic));
@@ -467,8 +487,7 @@ namespace OpenDocxTemplater.Tests
         //    DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/");
         //    FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
 
-        //    var templater = new Templater();
-        //    var compileResult = templater.CompileTemplate(templateDocx.FullName, "");
+        //    var compileResult = Templater.CompileTemplate(templateDocx.FullName, "");
         //    Assert.False(compileResult.HasErrors);
         //    Assert.True(File.Exists(compileResult.DocxGenTemplate));
         //}

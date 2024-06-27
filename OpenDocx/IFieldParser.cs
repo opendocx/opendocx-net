@@ -10,11 +10,100 @@ Email: lowell@opendocx.com
 ***************************************************************************/
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
 namespace OpenDocx
 {
+    public enum FieldType
+    {
+        Content,
+        If,
+        ElseIf,
+        Else,
+        EndIf,
+        List,
+        EndList,
+        Insert
+    }
+
+    public class ParsedField : IFieldTransformInfo
+    {
+        [JsonPropertyName("fieldType")]
+        public FieldType Type { get; set; }
+
+        [JsonPropertyName("expr")]
+        public string Expression { get; set; }
+
+        [JsonPropertyName("atomizedExpr")]
+        public string Atom { get; set; }
+
+        [JsonPropertyName("parent")]
+        public uint ParentNumber { get; set; }
+
+        [JsonIgnore]
+        public uint Number { get; set; }
+
+        [JsonIgnore]
+        public string Comment { get; set; }
+
+        [JsonIgnore]
+        internal List<ParsedField> ContentArray { get; set; } // only for temporary use when parsing Else and ElseIf fields
+
+        [JsonIgnore]
+        private string Prefix
+        {
+            get
+            {
+                switch (Type)
+                {
+                    case FieldType.Content:
+                        return string.Empty;
+                    case FieldType.If:
+                        return "if ";
+                    case FieldType.EndIf:
+                        return "endif";
+                    case FieldType.Else:
+                        return "else";
+                    case FieldType.ElseIf:
+                        return "elseif ";
+                    case FieldType.List:
+                        return "list ";
+                    case FieldType.EndList:
+                        return "endlist";
+                }
+                throw new Exception("Unexpected field type");
+            }
+        }
+
+        [JsonIgnore]
+        public string Content { get => Prefix + Atom; }
+    }
+
+    public class FieldLogicNode
+    {
+        [JsonPropertyName("type")]
+        public FieldType Type { get; set; }
+
+        [JsonPropertyName("expr")]
+        public string Expression { get; set; }
+
+        [JsonPropertyName("atom")]
+        public string Atom { get; set; }
+
+        [JsonPropertyName("id")]
+        public uint FirstField { get; set; }
+
+        [JsonPropertyName("idd")]
+        public IList<uint>? OtherFields { get; set; }
+
+        [JsonPropertyName("contentArray")]
+        public IList<FieldLogicNode>? Content { get; set; }
+    }
+
     public class FieldParseException : Exception
     {
         public FieldParseException() { }
