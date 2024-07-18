@@ -419,7 +419,7 @@ namespace OpenDocx
                     else if (metadata.Name == OD.If)
                         matchingEndName = OD.EndIf;
                     if (matchingEndName == null)
-                        throw new FieldParseException("Internal error");
+                        throw new Exception("Internal template transformation error");
                     var matchingEnd = metadata.ElementsAfterSelf(matchingEndName).FirstOrDefault(end => { return (int)end.Attribute(OD.Depth) == depth; });
                     if (matchingEnd == null)
                     {

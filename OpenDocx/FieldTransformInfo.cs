@@ -31,7 +31,7 @@ namespace OpenDocx
                     case "EndList":
                         return "endlist";
                 }
-                throw new Exception("Unexpected fieldType");
+                throw new FieldParseException("Unexpected fieldType '" + fieldType + "'");
             }
         }
 

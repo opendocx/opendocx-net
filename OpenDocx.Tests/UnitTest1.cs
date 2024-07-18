@@ -15,6 +15,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
+using System.Text.Json.Serialization;
 
 namespace OpenDocxTemplater.Tests
 {
@@ -60,38 +61,28 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
-            var transformResult = DoCompileTemplate(sourceTemplatePath);
-            Assert.False(transformResult.HasErrors);
-
+            //var transformResult = DoCompileTemplate(sourceTemplatePath);
+            //Assert.False(transformResult.HasErrors);
+            var prepareResult = OpenDocx.OpenDocx.PrepareTemplate(
+                File.ReadAllBytes(sourceTemplatePath),
+                new PrepareTemplateOptions() {
+                    GenerateFlatPreview = true,
+                    GenerateLogicTree = true,
+                }
+            );
             DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
-            File.WriteAllBytes(Path.Combine(destDir.FullName, name + "gen.docx"), transformResult.Bytes);
-
-            //string templateName = outputDocx.FullName;
-
-            //FileInfo templateDocx = new FileInfo(sourceTemplatePath);
-            //templateDocx.CopyTo(templateName, true);
-            //var extractResult = FieldExtractor.ExtractFields(templateName);
-            //Assert.True(File.Exists(extractResult.ExtractedFields));
-            //Assert.True(File.Exists(extractResult.TempTemplate));
-            //// check for valid JSON syntax
-            //Assert.True(IsValidJsonFile(extractResult.ExtractedFields));
-
-            ////// use the yatte engine to parse all the fields, creating an AST for the template
-            ////const ast = yatte.Engine.parseContentArray(fieldList)
-            //// test .NET-based conversion of extracted fields into field list!
-            //// now read extract field JSON
-            ////var fieldList = JsonConvert.DeserializeObject<JArray>(File.ReadAllText(extractResult.ExtractedFields)); // newtonsoft json
-            //// warning... the file 'templateName + "obj.fields.json"' must have been created by node.js external to this test. (hack/race)
-            //var compileResult = Templater.CompileTemplate(templateName, extractResult.TempTemplate, templateName + "obj.fields.json");
-            //Assert.False(compileResult.HasErrors);
-            //Assert.True(File.Exists(compileResult.DocxGenTemplate));
+            //File.WriteAllBytes(Path.Combine(destDir.FullName, name + "gen.docx"), transformResult.Bytes);
+            File.WriteAllBytes(Path.Combine(destDir.FullName, name + "gen.docx"), prepareResult.OXPTTemplateBytes);
+            File.WriteAllBytes(Path.Combine(destDir.FullName, name + "ncc.docx"), prepareResult.FlatPreviewBytes);
+            File.WriteAllText(Path.Combine(destDir.FullName, name + ".json"),
+                JsonSerializer.Serialize(prepareResult.LogicTree, OpenDocx.OpenDocx.DefaultJsonOptions));
         }
 
-        private Boolean IsValidJsonFile(string filePath) {
+        private bool IsValidJsonFile(string filePath) {
             return IsValidJson(File.ReadAllText(filePath));
         }
 
-        private Boolean IsValidJson(string json)
+        private bool IsValidJson(string json)
         {
             try
             {
@@ -136,7 +127,7 @@ namespace OpenDocxTemplater.Tests
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
-            var ex = Assert.Throws<Exception>(() => DoCompileTemplate(sourceTemplatePath));
+            var ex = Assert.Throws<FieldParseException>(() => DoCompileTemplate(sourceTemplatePath));
             Assert.Equal(message, ex.Message);
         }
 

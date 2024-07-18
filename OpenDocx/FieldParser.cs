@@ -38,7 +38,7 @@ namespace OpenDocx
                             parsedContent.Type.ToString(),
                             parsedContent.Number.ToString(),
                             parsedContent.Type == FieldType.EndList ? "List" : "If");
-                        throw new Exception(errMsg);
+                        throw new FieldParseException(errMsg);
                     }
                 }
                 astBody.AddRange(parsedContentItem); // js was: Array.prototype.push.apply(astBody, parsedContentItem)
@@ -175,7 +175,7 @@ namespace OpenDocx
                         targetType == FieldType.EndList ? "List" : "If",
                         originId.ToString(),
                         targetType.ToString());
-                    throw new Exception(errMsg);
+                    throw new FieldParseException(errMsg);
                 }
                 var parsedContent = ParseContentItem(idx, contentArray);
                 ParsedField parsedContent0 = null;
@@ -243,7 +243,7 @@ namespace OpenDocx
                             break;
                     }
                     if (errMsg != null)
-                        throw new Exception(errMsg);
+                        throw new FieldParseException(errMsg);
                 }
             }
             // remove (consume) all parsed items from the contentArray before returning
@@ -307,20 +307,5 @@ namespace OpenDocx
                 }
             }
         }
-
-//const buildLogicTree = function (astBody) {
-//  // return a copy of astBody with all (or at least some) logically insignificant nodes pruned out:
-//  // remove plain text nodes (non-dynamic)
-//  // remove EndIf and EndList nodes
-//  // remove Content nodes that are already defined in the same logical/list scope
-//  // always process down all if branches & lists
-//  // ~~~strip field ID metadata (for docx templates) since it no longer applies
-//  // ~~~ revised: leave it in so we know more about error location
-//  const copy = reduceContentArray(astBody)
-//  simplifyContentArray2(copy)
-//  simplifyContentArray3(copy)
-//  return copy
-//}
-
     }
 }

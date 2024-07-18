@@ -20,7 +20,7 @@ namespace OpenDocx
 {
     public enum FieldType
     {
-        Content,
+        Content = 1,
         If,
         ElseIf,
         Else,
@@ -75,8 +75,16 @@ namespace OpenDocx
                     case FieldType.EndList:
                         return "endlist";
                 }
-                throw new Exception("Unexpected field type");
+                throw new FieldParseException("Unexpected field type");
             }
+        }
+
+        [JsonIgnore]
+        public string Text
+        {
+            get => Prefix + (
+                string.IsNullOrWhiteSpace(Expression) ? string.Empty : Expression.Trim()
+            );
         }
 
         [JsonIgnore]
@@ -98,10 +106,32 @@ namespace OpenDocx
         public uint FirstField { get; set; }
 
         [JsonPropertyName("idd")]
-        public IList<uint>? OtherFields { get; set; }
+        public List<uint> OtherFields { get; set; }
 
         [JsonPropertyName("contentArray")]
-        public IList<FieldLogicNode>? Content { get; set; }
+        public List<FieldLogicNode> Content { get; set; }
+
+        [JsonIgnore]
+        internal LogicScope Scope { get; set; }
+
+        internal FieldLogicNode(ParsedField field, List<FieldLogicNode> content = null, LogicScope scope = null)
+        {
+            Type = field.Type;
+            Expression = field.Expression;
+            Atom = field.Atom;
+            FirstField = field.Number;
+            Content = content;
+            Scope = scope;
+        }
+
+        public void AddField(uint fieldNum)
+        {
+            if (OtherFields == null)
+            {
+                OtherFields = new List<uint>();
+            }
+            OtherFields.Add(fieldNum);
+        }
     }
 
     public class FieldParseException : Exception
