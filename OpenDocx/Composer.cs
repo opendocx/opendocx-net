@@ -22,52 +22,31 @@ namespace OpenDocx
 {
     public class Composer
     {
-        public AssembleResult ComposeDocument(string outputFile, List<Source> sources)
+        public static AssembleResult ComposeDocument(List<Source> oxptSources)
         {
-            var composedDoc = DocumentBuilder.BuildDocument(sources);
-            if (!string.IsNullOrEmpty(outputFile))
-            {
-                //// save the output (even in the case of error, since error messages are in the file)
-                composedDoc.SaveAs(outputFile);
-                return new AssembleResult(outputFile, false);
-            }
-            else
-            {
-                return new AssembleResult(composedDoc.DocumentByteArray, false);
-            }
+            var composedDoc = DocumentBuilder.BuildDocument(oxptSources);
+            return new AssembleResult(composedDoc.DocumentByteArray);
         }
 
-        // when calling from Node.js via Edge, we only get to pass one parameter
-        public object ComposeDocument(dynamic input)
+        public static AssembleResult ComposeDocument(IEnumerable<IndirectSource> sources)
         {
-            // input is an object containing (1) input.documentFile, a string, and (2) input.sources, an array of objects,
-            // where each object has (1) a unique ID, and (2) an array of bytes consisting of its contents
-            var documentFile = (string)input.documentFile;
-            var rawSources = (object[])input.sources;
-            if (rawSources == null || rawSources.Length == 0)
+            // rawSources is an array of objects, where each object has
+            // (1) a unique ID, and (2) an array of bytes consisting of its DOCX contents
+            if (sources == null || !sources.Any())
             {
                 throw new ArgumentException("Invalid sources argument supplied to ComposeDocument");
             }
-            List<Source> sources = new List<Source>(rawSources.Select(rawSource => {
-                var sourceObj = (IDictionary<string, object>)rawSource;
-                var id = (string)sourceObj["id"];
-                var bytes = (byte[])sourceObj["buffer"];
-                var doc = new WmlDocument(new OpenXmlPowerToolsDocument(bytes));
-                return string.IsNullOrWhiteSpace(id)
+            var oxptSources = sources.Select(source => {
+                var doc = new WmlDocument(new OpenXmlPowerToolsDocument(source.Bytes));
+                var oxptSource = string.IsNullOrWhiteSpace(source.ID)
                     ? new Source(doc, true)
-                    : new Source(doc, id);
-            }));
-            return ComposeDocument(documentFile, sources);
+                    : new Source(doc, source.ID);
+                if (source.KeepSections) {
+                    oxptSource.KeepSections = true;
+                }
+                return oxptSource;
+            }).ToList();
+            return ComposeDocument(oxptSources);
         }
-
-        // assembly is synchronous, but when calling from Node.js (via Edge) we may still need an async method
-#pragma warning disable CS1998
-        public async Task<object> ComposeDocumentAsync(dynamic input)
-        {
-            await Task.Yield();
-            return ComposeDocument(input);
-        }
-#pragma warning restore CS1998
-
     }
 }

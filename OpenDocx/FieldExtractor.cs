@@ -35,29 +35,6 @@ namespace OpenDocx
 {
     public class FieldExtractor
     {
-        #pragma warning disable CS1998
-        public async Task<object> ExtractFieldsAsync(dynamic input)
-        {
-            var templateFile = (string)input.templateFile;
-            string fieldDelimiters = null;
-            bool removeCustomProperties = true;
-            object[] keepPropertyNames = null;
-            var inputObj = (IDictionary<string, object>) input;
-            if (inputObj.ContainsKey("fieldDelimiters")) {
-                fieldDelimiters = (string)inputObj["fieldDelimiters"];
-            }
-            if (inputObj.ContainsKey("removeCustomProperties")) {
-                removeCustomProperties = (bool) inputObj["removeCustomProperties"];
-            }
-            if (inputObj.ContainsKey("keepPropertyNames")) {
-                keepPropertyNames = (object[]) inputObj["keepPropertyNames"];
-            }
-            await Task.Yield();
-            return ExtractFields(templateFile, removeCustomProperties,
-                keepPropertyNames?.Select(o => (string)o), fieldDelimiters);
-        }
-        #pragma warning restore CS1998
-
         public static FieldExtractResult ExtractFields(string templateFileName,
             bool removeCustomProperties = true, IEnumerable<string> keepPropertyNames = null,
             string fieldDelimiters = null)

@@ -29,25 +29,6 @@ using System.Diagnostics;
 namespace OpenDocx
 {
     public class TemplateTransformer {
-        // #pragma warning disable CS1998
-        // public async Task<object> TransformTemplateAsync(dynamic input)
-        // {
-        //     var preProcessedTemplateFile = (string)input.templateFile;
-        //     var originalTemplateFile = (string)input.originalTemplateFile;
-        //     TemplateFormat destinationFormat;
-        //     if (!Enum.TryParse((string)input.destinationFormat, out destinationFormat)) {
-        //         throw new ArgumentOutOfRangeException("destinationFormat");
-        //     }
-        //     IDictionary<string, string> fieldMap = null;
-        //     var inputObj = (IDictionary<string, object>) input;
-        //     if (inputObj.ContainsKey("fieldMap")) {
-        //         fieldMap = (IDictionary<string, string>) inputObj["fieldMap"];
-        //     }
-        //     await Task.Yield();
-        //     return TransformTemplate(originalTemplateFile, preProcessedTemplateFile, destinationFormat, fieldMap);
-        // }
-        // #pragma warning restore CS1998
-
         public static string[] TransformTemplate(string normalizedTemplatePath,
             string destinationTemplatePath, TemplateFormat destinationFormat, FieldReplacementIndex fieldMap,
             string commentAuthor = null, string commentInitials = null)

@@ -55,15 +55,6 @@ namespace OpenDocx
             return new ValidateResult(hasErrors, errorList);
         }
 
-        #pragma warning disable CS1998
-        public async Task<object> ValidateDocumentAsync(dynamic input)
-        {
-            var documentFile = (string)input.documentFile;
-            await Task.Yield();
-            return ValidateDocument(documentFile);
-        }
-        #pragma warning restore CS1998
-
         private static List<string> s_ExpectedErrors = new List<string>()
         {
             "The 'http://schemas.openxmlformats.org/wordprocessingml/2006/main:evenHBand' attribute is not declared.",

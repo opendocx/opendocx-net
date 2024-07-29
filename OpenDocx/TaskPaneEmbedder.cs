@@ -27,7 +27,7 @@ namespace OpenDocx;
 
 public class TaskPaneEmbedder
 {
-    public byte[] EmbedTaskPane(byte[] docxBytes, string guid, string addInId, string version, string store,
+    public static byte[] EmbedTaskPane(byte[] docxBytes, string guid, string addInId, string version, string store,
         string storeType, string dockState, bool visibility, double width, uint row)
     {
         using (MemoryStream memoryStream = new MemoryStream())
@@ -139,7 +139,7 @@ public class TaskPaneEmbedder
         }
     }
 
-    public byte[] RemoveTaskPane(byte[] docxBytes, string guid)
+    public static byte[] RemoveTaskPane(byte[] docxBytes, string guid)
     {
         using (MemoryStream memoryStream = new MemoryStream())
         {
@@ -178,29 +178,5 @@ public class TaskPaneEmbedder
             }
             return memoryStream.ToArray();
         }
-    }
-
-    // when calling from Node.js via Edge, we only get to pass one parameter
-    public async Task<object> EmbedTaskPaneAsync(dynamic input)
-    {
-        var inputDict = (IDictionary<string, object>)input;
-        var docxBytes = (byte[])input.docxBytes;
-        var guid = (string)input.guid;
-        var addInId = (string)input.addInId;
-        var version = (string)input.version;
-        var store = inputDict.ContainsKey("store") ? (string)inputDict["store"] : "en-US";
-        var storeType = inputDict.ContainsKey("storeType") ? (string)inputDict["storeType"] : "OMEX";
-        var dockState = inputDict.ContainsKey("dockState") ? (string)inputDict["dockState"] : "right";
-        var visibility = inputDict.ContainsKey("visibility") ? (bool)inputDict["visibility"] : true;
-        var width = inputDict.ContainsKey("width") ? Convert.ToDouble(inputDict["width"]) : 350.0;
-        var row = inputDict.ContainsKey("row") ? Convert.ToUInt32(inputDict["row"]) : 1U;
-        return EmbedTaskPane(docxBytes, guid, addInId, version, store, storeType, dockState, visibility, width, row);
-    }
-
-    public async Task<object> RemoveTaskPaneAsync(dynamic input)
-    {
-        var docxBytes = (byte[])input.docxBytes;
-        var guid = (string)input.guid;
-        return RemoveTaskPane(docxBytes, guid);
     }
 }

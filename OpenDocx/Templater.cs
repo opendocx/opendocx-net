@@ -19,17 +19,6 @@ namespace OpenDocx
 {
     public static class Templater
     {
-        #pragma warning disable CS1998
-        public static async Task<object> CompileTemplateAsync(dynamic input)
-        {
-            var preProcessedTemplateFile = (string)input.templateFile;
-            var originalTemplateFile = (string)input.originalTemplateFile;
-            var parsedFieldInfoFile = (string)input.fieldInfoFile;
-            await Task.Yield();
-            return CompileTemplate(originalTemplateFile, preProcessedTemplateFile, parsedFieldInfoFile);
-        }
-        #pragma warning restore CS1998
-
         public static CompileResult CompileTemplate(string originalTemplateFile, string preProcessedTemplateFile, string parsedFieldInfoFile)
         {
             string json = File.ReadAllText(parsedFieldInfoFile);

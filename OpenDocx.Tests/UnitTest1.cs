@@ -16,6 +16,7 @@ using System.Text.Json.Nodes;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
 using System.Text.Json.Serialization;
+using static OpenXmlPowerTools.DocumentAssembler;
 
 namespace OpenDocxTemplater.Tests
 {
@@ -220,7 +221,7 @@ namespace OpenDocxTemplater.Tests
         // [InlineData("Married RLT Plain.docx")]
         // [InlineData("text_field_formatting.docx")]
         // [InlineData("kMANT.docx")]
-        // public async void FieldExtractorAsync(string name)
+        // public void FieldExtractorAsync(string name)
         // {
         //     DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
         //     FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
@@ -228,12 +229,7 @@ namespace OpenDocxTemplater.Tests
         //     FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
         //     string templateName = outputDocx.FullName;
         //     templateDocx.CopyTo(templateName, true);
-        //     dynamic options = new ExpandoObject();
-        //     options.templateFile = templateName;
-        //     options.removeCustomProperties = true;
-        //     options.keepPropertyNames = new object[] { "UpdateFields" };
-        //     var od = new TextExtractFields();
-        //     var extractResult = await od.ExtractFieldsAsync(options);
+        //     var extractResult = TextExtractFields.ExtractFields(templateName, true, ["UpdateFields"]);
         //     Assert.True(File.Exists(extractResult.ExtractedFields));
         //     Assert.True(File.Exists(extractResult.TempTemplate));
         // }
@@ -242,7 +238,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("HDLetter_Summary.docx", "«»")]
         [InlineData("HDTrust_RLT.docx", "«»")]
         [InlineData("HDSimple.docx", "«»")]
-        public async void FieldExtractorAltSyntaxAsync(string name, string delims)
+        public void FieldExtractorAltSyntax(string name, string delims)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
@@ -250,12 +246,7 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            dynamic options = new ExpandoObject();
-            options.templateFile = templateName;
-            options.fieldDelimiters = delims;
-            options.removeCustomProperties = true;
-            var od = new FieldExtractor();
-            var extractResult = await od.ExtractFieldsAsync(options);
+            var extractResult = FieldExtractor.ExtractFields(templateName, true, null, delims);
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
             var val = Newtonsoft.Json.JsonConvert.DeserializeObject<JArray>(json);
@@ -311,7 +302,7 @@ namespace OpenDocxTemplater.Tests
 
         [Theory]
         [InlineData("has_taskpanes.docx")]
-        public async void RemoveTaskPanes(string name)
+        public void RemoveTaskPanes(string name)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
@@ -319,10 +310,7 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            dynamic options = new ExpandoObject();
-            options.templateFile = templateName;
-            var od = new FieldExtractor();
-            var extractResult = await od.ExtractFieldsAsync(options);
+            var extractResult = FieldExtractor.ExtractFields(templateName);
             Assert.True(File.Exists(extractResult.TempTemplate));
             // ensure interim template (which SHOULD no longer have task panes) still validates
             var validator = new Validator();
@@ -361,13 +349,12 @@ namespace OpenDocxTemplater.Tests
         [InlineData("xmlerror.docx", "xmlerror.xml", "xmlerror-assembled.docx")]
         public async Task AssembleDocument(string name, string data, string outName)
         {
-            var assembler = new Assembler();
-            var assembleResult = await assembler.AssembleDocAsync(
+            var assembleResult = await Assembler.AssembleDocAsync(
                 GetTestTemplate(name),
                 GetTestXmlData(data),
                 GetTestOutput(outName),
                 null);
-            Assert.True(File.Exists(assembleResult.Document));
+            Assert.True(assembleResult.Bytes.Length > 0);
         }
 
         public void LogicToJson()
@@ -404,18 +391,17 @@ namespace OpenDocxTemplater.Tests
         public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName)
         {
             var mainData = GetTestXmlData(data);
-            var assembler = new Assembler();
             List<Source> sources = new List<Source>()
             {
                 new TemplateSource(GetTestTemplate(insert), mainData, "inserted"),
             };
             sources[0].KeepSections = keepsections;
-            var result3 = await assembler.AssembleDocAsync(
+            var result3 = await Assembler.AssembleDocAsync(
                 GetTestTemplate(name),
                 mainData,
                 GetTestOutput(outName),
                 sources);
-            Assert.True(File.Exists(result3.Document));
+            Assert.True(result3.Bytes.Length > 0);
         }
 
         [Theory]
@@ -424,9 +410,8 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_one.docx", "addins_one_one_added(updated).docx")]
         public async Task AddTaskPane(string name, string outName)
         {
-            var embedder = new TaskPaneEmbedder();
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
-            var modBytes = embedder.EmbedTaskPane(
+            var modBytes = TaskPaneEmbedder.EmbedTaskPane(
               bytes,
               "{635BF0CD-42CC-4174-B8D2-6D375C9A759E}",
               "wa104380862",
@@ -449,9 +434,8 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_none.docx", "addins_none_removed.docx")]
         public async Task RemoveTaskPane(string name, string outName)
         {
-            var embedder = new TaskPaneEmbedder();
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
-            var modBytes = embedder.RemoveTaskPane(bytes, "{635BF0CD-42CC-4174-B8D2-6D375C9A759E}");
+            var modBytes = TaskPaneEmbedder.RemoveTaskPane(bytes, "{635BF0CD-42CC-4174-B8D2-6D375C9A759E}");
             var outPath = GetTestOutput(outName);
             await File.WriteAllBytesAsync(outPath, modBytes);
             Assert.True(File.Exists(outPath));

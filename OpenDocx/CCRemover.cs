@@ -19,16 +19,6 @@ namespace OpenDocx
 {
     public class CCRemover
     {
-        #pragma warning disable CS1998
-        public async Task<object> RemoveCCsAsync(dynamic input)
-        {
-            var preProcessedTemplateFile = (string)input.templateFile;
-            var originalTemplateFile = (string)input.originalTemplateFile;
-            await Task.Yield();
-            return RemoveCCs(originalTemplateFile, preProcessedTemplateFile);
-        }
-        #pragma warning restore CS1998
-
         public CompileResult RemoveCCs(string originalTemplateFile, string preProcessedTemplateFile)
         {
             string json = File.ReadAllText(originalTemplateFile + "obj.json");
