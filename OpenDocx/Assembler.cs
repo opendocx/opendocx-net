@@ -22,82 +22,60 @@ namespace OpenDocx;
 
 public class Assembler
 {
-    public AssembleResult AssembleDocument(string templateFile, TextReader xmlData, string outputFile)
+    public static AssembleResult AssembleDocument(byte[] templateBytes, XElement xmlData)
     {
-        if (!File.Exists(templateFile))
-            throw new FileNotFoundException("Template not found in the expected location", templateFile);
-        WmlDocument templateDoc = new WmlDocument(templateFile); // reads the template's bytes into memory
-        XElement data = xmlData.Peek() == -1 ? new XElement("none") : XElement.Load(xmlData);
-        WmlDocument wmlAssembledDoc = DocumentAssembler.AssembleDocument(templateDoc, data, out bool templateError);
+        WmlDocument templateDoc = new(new OpenXmlPowerToolsDocument(templateBytes));
+        WmlDocument wmlAssembledDoc = DocumentAssembler.AssembleDocument(templateDoc, xmlData, out bool templateError);
+        string errorMessage = null;
         if (templateError)
         {
-            Console.WriteLine("Errors in template.");
-            Console.WriteLine("See the assembled document to inspect errors.");
+            errorMessage = "Unexpected template errors - please inspect the assembled document.";
+            Console.WriteLine(errorMessage);
         }
+        return new AssembleResult(wmlAssembledDoc.DocumentByteArray, errorMessage);
+    }
+
+    public static async Task<AssembleResult> AssembleDocAsync(string templateFile, XElement data, string outputFile, List<Source> sources)
+    {
+        var result = await AssembleDocAsync(File.ReadAllBytes(templateFile), data, sources);
         if (!string.IsNullOrEmpty(outputFile))
         {
             //// save the output (even in the case of error, since error messages are in the file)
-            wmlAssembledDoc.SaveAs(outputFile);
-            return new AssembleResult(outputFile, templateError);
+            await File.WriteAllBytesAsync(outputFile, result.Bytes);
         }
-        else
-        {
-            return new AssembleResult(wmlAssembledDoc.DocumentByteArray, templateError);
-        }
+        return result;
     }
 
-    public async Task<AssembleResult> AssembleDocAsync(
-        string templateFile, XElement data, string outputFile, List<Source> sources)
+    public static async Task<AssembleResult> AssembleDocAsync(byte[] templateBytes, XElement data, List<Source> sources)
     {
-        if (!File.Exists(templateFile))
-            throw new FileNotFoundException("Template not found in the expected location", templateFile);
-        WmlDocument templateDoc = new WmlDocument(templateFile); // reads the template's bytes into memory
+        WmlDocument templateDoc = new(new OpenXmlPowerToolsDocument(templateBytes));
         WmlDocument wmlAssembledDoc = await DocumentComposer.ComposeDocument(templateDoc, data, sources);
-        if (!string.IsNullOrEmpty(outputFile))
-        {
-            //// save the output (even in the case of error, since error messages are in the file)
-            wmlAssembledDoc.SaveAs(outputFile);
-            return new AssembleResult(outputFile, false);
-        }
-        else
-        {
-            return new AssembleResult(wmlAssembledDoc.DocumentByteArray, false);
-        }
+        return new AssembleResult(wmlAssembledDoc.DocumentByteArray);
     }
 
-    // when calling from Node.js via Edge, we only get to pass one parameter
-    public async Task<object> AssembleDocumentAsync(dynamic input)
+    public static async Task<AssembleResult> AssembleDocumentAsync(byte[] templateBytes, string xmlData, IEnumerable<IndirectSource> sources)
     {
-        var inputDict = (IDictionary<string, object>)input;
-        var xmlData = inputDict.ContainsKey("xmlData") ? (string)inputDict["xmlData"] : null;
-        var templateFile = (string)input.templateFile;
-        var documentFile = (string)input.documentFile;
-        List<Source> sources = null;
-        var rawSources = inputDict.ContainsKey("sources") ? (object[])inputDict["sources"] : null;
-        if (rawSources != null)
+        List<Source> oxptSources = null;
+        if (sources != null)
         {
-            sources = new List<Source>(rawSources.Select(rawSource => {
-                var sourceObj = (IDictionary<string, object>)rawSource;
-                var id = (string)sourceObj["id"];
-                var bytes = (byte[])sourceObj["buffer"];
-                var doc = new WmlDocument(new OpenXmlPowerToolsDocument(bytes));
-                var keepSections = (bool)sourceObj["keepSections"];
-                var source = new Source(doc, id);
-                if (keepSections) {
-                    source.KeepSections = true;
+            oxptSources = sources.Select(source => {
+                var doc = new WmlDocument(new OpenXmlPowerToolsDocument(source.Bytes));
+                var oxptSource = new Source(doc, source.ID);
+                if (source.KeepSections) {
+                    oxptSource.KeepSections = true;
                 }
-                return source;
-            }));
+                return oxptSource;
+            }).ToList();
         }
-        using (var xmlReader = new StringReader(xmlData))
+        using var xmlReader = new StringReader(xmlData);
         try
         {
-            return await AssembleDocAsync(templateFile, XElement.Load(xmlReader), documentFile, sources);
+            return await AssembleDocAsync(templateBytes, XElement.Load(xmlReader), oxptSources);
         }
         catch (XmlException e)
         {
             e.Data.Add("xml", xmlData);
-            throw e;
+            throw;
         }
     }
 }

@@ -1,21 +1,23 @@
-﻿namespace OpenDocx
+﻿using System.IO;
+
+namespace OpenDocx
 {
     public class AssembleResult
     {
-        public string Document { get; }
         public byte[] Bytes { get; }
-        public bool HasErrors { get; }
+        public string Error { get; }
+        public bool HasErrors { get => string.IsNullOrEmpty(Error); }
 
-        internal AssembleResult(string documentFilename, bool hasErrors)
+        internal AssembleResult(string documentFilename, string error = null)
         {
-            Document = documentFilename;
-            HasErrors = hasErrors;
+            Bytes = File.ReadAllBytes(documentFilename);
+            Error = error;
         }
 
-        internal AssembleResult(byte[] document, bool hasErrors)
+        internal AssembleResult(byte[] document, string error = null)
         {
             Bytes = document;
-            HasErrors = hasErrors;
+            Error = error;
         }
     }
 }
