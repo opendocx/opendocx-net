@@ -20,7 +20,7 @@ using OpenXmlPowerTools;
 
 namespace OpenDocx;
 
-public class Assembler
+public static class Assembler
 {
     public static AssembleResult AssembleDocument(byte[] templateBytes, XElement xmlData)
     {

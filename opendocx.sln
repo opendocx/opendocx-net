@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx", "OpenDocx\OpenDo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenDocx.Tests", "OpenDocx.Tests\OpenDocx.Tests.csproj", "{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "odx", "odx\odx.csproj", "{12956F10-69BA-490E-A8F6-88F7FA038012}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F55EF72F-0F6D-4E2F-A0B1-D483123E149A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12956F10-69BA-490E-A8F6-88F7FA038012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12956F10-69BA-490E-A8F6-88F7FA038012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12956F10-69BA-490E-A8F6-88F7FA038012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12956F10-69BA-490E-A8F6-88F7FA038012}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
