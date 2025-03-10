@@ -58,6 +58,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("simple-short.docx")]
         [InlineData("StrayCC.docx")]
         [InlineData("NestedFieldWeird.docx")]
+        [InlineData("notext.docx")]
         public void CompileTemplate(string name)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
@@ -447,9 +448,8 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_none.docx", 0)]
         public async Task GetTaskPaneInfo(string name, int expectedCount)
         {
-            var embedder = new OpenDocx.TaskPaneEmbedder();
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
-            var metadata = embedder.GetTaskPaneInfo(bytes);
+            var metadata = TaskPaneEmbedder.GetTaskPaneInfo(bytes);
             Assert.Equal(expectedCount, metadata.Length);
         }
 

@@ -181,7 +181,7 @@ public class TaskPaneEmbedder
         }
     }
 
-    public TaskPaneMetadata[] GetTaskPaneInfo(byte[] docxBytes) {
+    public static TaskPaneMetadata[] GetTaskPaneInfo(byte[] docxBytes) {
         var result = new List<TaskPaneMetadata>();
         using (MemoryStream memoryStream = new MemoryStream(docxBytes))
         {
