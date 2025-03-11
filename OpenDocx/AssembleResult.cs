@@ -6,7 +6,7 @@ namespace OpenDocx
     {
         public byte[] Bytes { get; }
         public string Error { get; }
-        public bool HasErrors { get => string.IsNullOrEmpty(Error); }
+        public bool HasErrors { get => !string.IsNullOrEmpty(Error); }
 
         internal AssembleResult(string documentFilename, string error = null)
         {
