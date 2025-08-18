@@ -1,20 +1,18 @@
 ﻿/***************************************************************************
 
-Copyright (c) Lowell Stewart 2018-2019.
+Copyright (c) Lowell Stewart 2018-2025.
 Licensed under the Mozilla Public License. See LICENSE file in the project root for full license information.
 
-Published at https://github.com/opendocx/opendocx
+Published at https://github.com/opendocx/opendocx-net
 Developer: Lowell Stewart
 Email: lowell@opendocx.com
 
 ***************************************************************************/
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace OpenDocx
 {
@@ -131,6 +129,39 @@ namespace OpenDocx
                 OtherFields = new List<uint>();
             }
             OtherFields.Add(fieldNum);
+        }
+
+        internal void SerializeToLegacyModule(StringBuilder sb)
+        {
+            switch (Type)
+            {
+                case FieldType.Content:
+                    sb.Append($"h.define('{Atom}','{Expression}');\n");
+                    break;
+                case FieldType.If:
+                case FieldType.ElseIf:
+                    if (Type == FieldType.ElseIf) sb.Append("} else {\n");
+                    sb.Append($"if(h.beginCondition('{Atom}b','{Expression}'))\n");
+                    sb.Append("{\n");
+                    Content.ForEach(node => node.SerializeToLegacyModule(sb));
+                    sb.Append("}\n");
+                    break;
+                case FieldType.Else:
+                    sb.Append("} else {\n");
+                    Content.ForEach(node => node.SerializeToLegacyModule(sb));
+                    break;
+                case FieldType.List:
+                    sb.Append($"for (const {Atom}i of h.beginList('{Atom}', '{Expression}'))\n");
+                    sb.Append("{\n");
+                    sb.Append($"h.beginObject('{Atom}i',{Atom}i);\n");
+                    Content.ForEach(node => node.SerializeToLegacyModule(sb));
+                    sb.Append($"h.define('{Atom}p','_punc');\n");
+                    sb.Append("h.endObject()\n}\n");
+                    sb.Append("h.endList();\n");
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
         }
     }
 

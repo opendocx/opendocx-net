@@ -129,7 +129,7 @@ namespace OpenDocx.CommandLine
                 if (wantPreview) {
                     o.GenerateFlatPreview = true;
                 }
-                var result = OpenDocx.PrepareTemplate(File.ReadAllBytes(inFile), o);
+                var result = Templater.PrepareTemplate(File.ReadAllBytes(inFile), o);
                 // save results: (TODO)
             }
             else

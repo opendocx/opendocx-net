@@ -5,7 +5,7 @@
       // Use IntelliSense to find out which attributes exist for C# debugging
       // Use hover for the description of the existing attributes
       // For further information visit https://github.com/dotnet/vscode-csharp/blob/main/debugger-launchjson.md
-      "name": ".NET Core Launch (console)",
+      "name": ".NET Core TESTS (console)",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
@@ -15,9 +15,34 @@
       "cwd": "${workspaceFolder}/OpenDocx.Tests",
       // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
       "console": "internalConsole",
-      "stopAtEntry": false
+      "stopAtEntry": false,
+      "justMyCode": true
     },
     {
+      "name": "odx Launch (console)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      // If you have changed target frameworks, make sure to update the program path.
+      "program": "${workspaceFolder}/odx/bin/Debug/net6.0/odx.dll",
+      //"args": ["master_neiburger.cmp", "master_neiburger.csv"],
+      // "args": ["master_dayton.cmp", "master_dayton.csv"],
+      // "args": ["/Users/lowell/dev/knackly/testcases/AschenComponents.csv", "sample.json"],
+      // "args": ["MasterGen-Copy.csv", "mastergen.json"],
+      // "args": ["master_oa.cmp", "master_oa3.csv"],
+      // "args": [
+      //   "/Users/lowell/dev/knackly/server/files/lowell0/5e568a3b751de647e646dc7c/_t/af41db80-1b70-11ee-acc6-2bc4fda72b1f.docxgen.docx",
+      //   "--assemble",
+      //   "/Users/lowell/dev/knackly/server/appFiles/7cfa2750-fe12-11ef-8f3d-9b965d5de27f/2_f40345a5-b7f3-48b3-b769-7eda5a3f6a25.xml",
+      //   "--output",
+      //   "/Users/lowell/dev/knackly/server/appFiles/7cfa2750-fe12-11ef-8f3d-9b965d5de27f/2_f40345a5-b7f3-48b3-b769-7eda5a3f6a25.docx"
+      // ],
+      "cwd": "${workspaceFolder}/odx/bin/Debug/net6.0/",
+      // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
+      "console": "internalConsole",
+      "stopAtEntry": false
+  },
+{
       "name": ".NET Core Attach",
       "type": "coreclr",
       "request": "attach"

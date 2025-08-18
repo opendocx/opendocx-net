@@ -254,7 +254,7 @@ namespace OpenDocx
                 if (element.Name == W.p) {
                     var paraContents = element
                         .DescendantsTrimmed(W.txbxContent)
-                        .Where(e => e.Name == W.t)
+                        .Where(e => e.Name == W.t) // beware: includes text runs but omits SYMBOLS, so no 1:1 correspondence with text position!
                         .Select(t => (string)t)
                         .StringConcatenate()
                         .Trim();
@@ -324,7 +324,7 @@ namespace OpenDocx
                                 var runToReplace = newPara.Descendants(W.r).FirstOrDefault(rn => rn.Value == placeholderText
                                                                                                  && rn.Parent.Name != OD.Content);
                                 if (runToReplace == null)
-                                    throw new InvalidOperationException("Internal error");
+                                    throw new InvalidOperationException("Internal field replacement error");
                                 else
                                 {
                                     var rpr = runToReplace.Elements(W.rPr).FirstOrDefault();

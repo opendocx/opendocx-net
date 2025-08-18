@@ -17,6 +17,7 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
 using System.Text.Json.Serialization;
 using static OpenXmlPowerTools.DocumentAssembler;
+using System.Xml.Schema;
 
 namespace OpenDocxTemplater.Tests
 {
@@ -65,11 +66,12 @@ namespace OpenDocxTemplater.Tests
             var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
             //var transformResult = DoCompileTemplate(sourceTemplatePath);
             //Assert.False(transformResult.HasErrors);
-            var prepareResult = OpenDocx.OpenDocx.PrepareTemplate(
+            var prepareResult = Templater.PrepareTemplate(
                 File.ReadAllBytes(sourceTemplatePath),
                 new PrepareTemplateOptions() {
                     GenerateFlatPreview = true,
                     GenerateLogicTree = true,
+                    GenerateLegacyLogicModule = true
                 }
             );
             DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
@@ -78,6 +80,12 @@ namespace OpenDocxTemplater.Tests
             File.WriteAllBytes(Path.Combine(destDir.FullName, name + "ncc.docx"), prepareResult.FlatPreviewBytes);
             File.WriteAllText(Path.Combine(destDir.FullName, name + ".json"),
                 JsonSerializer.Serialize(prepareResult.LogicTree, OpenDocx.OpenDocx.DefaultJsonOptions));
+            File.WriteAllText(Path.Combine(destDir.FullName, name + ".js"), prepareResult.LegacyLogicModule);
+            // TODO: compare legacy module produced with module from original opendocx-node! Ensure they are identical.
+            DirectoryInfo compDir = new DirectoryInfo("../../../../../opendocx/test/history/dot-net-results/");
+            var compFile = Path.Combine(compDir.FullName, name + ".js");
+            var compContent = File.ReadAllText(compFile);
+            AssertEqualIgnoringSpaces(compContent, prepareResult.LegacyLogicModule);
         }
 
         private bool IsValidJsonFile(string filePath) {
@@ -174,7 +182,7 @@ namespace OpenDocxTemplater.Tests
                 transformedDoc.Save();
             }
             // transformedDoc still has leftover bits of the invalid smart tag, and should therefore be invalid
-             // (consider whether it would be appropriate to patch SimplifyMarkup to correctly remove this apparently invalid smart tag?)
+            // (consider whether it would be appropriate to patch SimplifyMarkup to correctly remove this apparently invalid smart tag?)
             var validator = new Validator();
             var result = validator.ValidateDocument(outPath);
             // MS Word also complains about the validity of this document
@@ -254,7 +262,7 @@ namespace OpenDocxTemplater.Tests
             // sub in field number tokens to test replacement for CCRemover
             var fieldMap = new FieldReplacementIndex();
             foreach (JObject obj in FlattenFields(val)) {
-                var oid = (string)obj["id"]; 
+                var oid = (string)obj["id"];
                 fieldMap[oid] = new FieldReplacement("=:" + oid + ":=");
             }
             // transform to Preview template
@@ -266,7 +274,7 @@ namespace OpenDocxTemplater.Tests
             // also try a rudimentary map from alternate syntax to OpenDocx-ish field content (preparing for transform)
             var fieldMap2 = new FieldReplacementIndex();
             foreach (JObject obj in FlattenFields(val)) {
-                var oid = (string)obj["id"]; 
+                var oid = (string)obj["id"];
                 var oldContent = (string)obj["content"];
                 fieldMap2[oid] = new FieldReplacement(MockMapFieldContent(oldContent), oldContent);
             }
@@ -285,6 +293,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("HDLetter_Summary.docx", "«»")]
         [InlineData("HDTrust_RLT.docx", "«»")]
         [InlineData("HDSimple.docx", "«»")]
+        //[InlineData("hdwpsymbols.docx", "«»")]
         public async void FieldExtractorLiteAltSyntaxAsync(string name, string delims)
         {
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
@@ -356,11 +365,6 @@ namespace OpenDocxTemplater.Tests
                 GetTestOutput(outName),
                 null);
             Assert.True(assembleResult.Bytes.Length > 0);
-        }
-
-        public void LogicToJson()
-        {
-
         }
 
         [Theory]
@@ -533,5 +537,24 @@ namespace OpenDocxTemplater.Tests
             // else assume merge field
             return content;
         }
+        
+        public static void AssertEqualIgnoringSpaces(string expected, string actual) {
+            string normalizedExpected = RemoveSpaces(expected);
+            string normalizedActual = RemoveSpaces(actual);
+            Assert.Equal(normalizedExpected, normalizedActual);
+        }
+
+        private static string RemoveSpaces(string input) {
+            var sb = new System.Text.StringBuilder(input.Length);
+            for (int i = 0; i < input.Length; i++) {
+                char c = input[i];
+                // skip LF if followed by another LF
+                if (c == '\n' && i + 1 < input.Length && input[i + 1] == '\n') continue; // skip this LF
+                // Add character if it's not a space
+                if (c != ' ') sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
     }
 }

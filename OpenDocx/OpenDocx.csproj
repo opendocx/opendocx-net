@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RootNamespace>OpenDocx</RootNamespace>
@@ -11,8 +11,16 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="2.10.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="Microsoft.DotNet.InternalAbstractions" Version="1.0.0" />
+    <!--<PackageReference Include="Microsoft.DotNet.InternalAbstractions" Version="1.0.0" />-->
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="7.0.0" />
     <PackageReference Include="OpenXmlPowerTools-Net6" Version="4.6.24" />
+    <PackageReference Include="System.IO.Packaging" Version="6.0.1" />
   </ItemGroup>
+  <!--<ItemGroup>
+    <Reference Include="OpenXmlPowerTools">
+      <HintPath>..\..\Open-Xml-PowerTools\OpenXmlPowerTools\bin\Debug\net6.0\OpenXmlPowerTools.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>-->
+
 </Project>

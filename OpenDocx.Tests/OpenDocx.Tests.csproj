@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
 
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -16,6 +16,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+  <!--<ItemGroup>
+    <Reference Include="OpenXmlPowerTools">
+      <HintPath>..\..\Open-Xml-PowerTools\OpenXmlPowerTools\bin\Debug\net6.0\OpenXmlPowerTools.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>-->
 
   <ItemGroup>
     <ProjectReference Include="..\OpenDocx\OpenDocx.csproj" />
