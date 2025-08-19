@@ -538,7 +538,7 @@ namespace OpenDocxTemplater.Tests
             return content;
         }
         
-        public static void AssertEqualIgnoringSpaces(string expected, string actual) {
+        private static void AssertEqualIgnoringSpaces(string expected, string actual) {
             string normalizedExpected = RemoveSpaces(expected);
             string normalizedActual = RemoveSpaces(actual);
             Assert.Equal(normalizedExpected, normalizedActual);

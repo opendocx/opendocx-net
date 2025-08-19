@@ -109,6 +109,22 @@ namespace OpenDocx
             return result;
         }
 
+        public static void AddFieldsToDict(JsonArray jsonArray, Dictionary<string, string> fieldDict)
+        {
+            // Loop through each item
+            foreach (JsonNode item in jsonArray)
+            {
+                if (item is JsonArray)
+                {
+                    AddFieldsToDict(item as JsonArray, fieldDict);
+                } else {
+                    var content = item["content"]?.ToString();
+                    var fieldId = item["id"]?.ToString();
+                    fieldDict[fieldId] = content;
+                }
+            }
+        }
+
         public static CompileResult CompileTemplate(string originalTemplateFile, string preProcessedTemplateFile, string parsedFieldInfoFile)
         {
             string json = File.ReadAllText(parsedFieldInfoFile);

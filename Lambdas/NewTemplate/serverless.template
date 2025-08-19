@@ -1,0 +1,123 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Template that creates a S3 bucket and a Lambda function that will be invoked when new objects are upload to the bucket.",
+  "Parameters": {
+    "ExistingBucketName": {
+      "Type": "String",
+      "Description": "Name of the existing S3 bucket to trigger the Lambda function."
+    }
+  },
+  "Resources": {
+    "DocxUploadExtractFields": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": "DocxUploadExtractFields",
+        "CodeUri": "",
+        "Description": "Step 1 - After DOCX upload, extract and normalize field structure",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Handler": "NewTemplate::NewTemplate.Functions::DocxUploadExtractFields",
+        "Runtime": "dotnet8",
+        "Role": null,
+        "Policies": [
+          "AWSLambda_FullAccess",
+          {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:s3:::${ExistingBucketName}/*"
+                }
+              }
+            ]
+          }
+        ],
+        "Architectures": [
+          "x86_64"
+        ],
+        "EphemeralStorage": {
+          "Size": 512
+        },
+        "EventInvokeConfig": {
+          "MaximumEventAgeInSeconds": 21600,
+          "MaximumRetryAttempts": 2
+        },
+        "PackageType": "Zip",
+        "SnapStart": {
+          "ApplyOn": "None"
+        },
+        "RuntimeManagementConfig": {
+          "UpdateRuntimeOn": "Auto"
+        }
+      }
+    },
+    "DocxUploadTransformTemplate": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": "DocxUploadTransformTemplate",
+        "CodeUri": "",
+        "Description": "Step 3 - After template fields have been parsed, translate field syntax",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Handler": "NewTemplate::NewTemplate.Functions::DocxUploadTransformTemplate",
+        "Runtime": "dotnet8",
+        "Role": null,
+        "Policies": [
+          "AWSLambda_FullAccess",
+          {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:s3:::${ExistingBucketName}/*"
+                }
+              }
+            ]
+          }
+        ],
+        "Architectures": [
+          "x86_64"
+        ],
+        "EphemeralStorage": {
+          "Size": 512
+        },
+        "EventInvokeConfig": {
+          "MaximumEventAgeInSeconds": 21600,
+          "MaximumRetryAttempts": 2
+        },
+        "PackageType": "Zip",
+        "SnapStart": {
+          "ApplyOn": "None"
+        },
+        "RuntimeManagementConfig": {
+          "UpdateRuntimeOn": "Auto"
+        }
+      }
+    }
+  }
+}
