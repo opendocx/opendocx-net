@@ -66,7 +66,7 @@ namespace OpenDocxTemplater.Tests
             var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
             //var transformResult = DoCompileTemplate(sourceTemplatePath);
             //Assert.False(transformResult.HasErrors);
-            var prepareResult = Templater.PrepareTemplate(
+            var prepareResult = OpenDocx.OpenDocx.PrepareTemplate(
                 File.ReadAllBytes(sourceTemplatePath),
                 new PrepareTemplateOptions() {
                     GenerateFlatPreview = true,
