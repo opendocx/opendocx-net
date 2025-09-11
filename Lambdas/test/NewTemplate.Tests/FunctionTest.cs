@@ -8,6 +8,7 @@ using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Util;
+using Amazon.SQS;
 using System.Collections.Generic;
 
 namespace NewTemplate.Tests;
@@ -18,6 +19,7 @@ public class FunctionTest
     public async Task TestS3EventLambdaFunction()
     {
         IAmazonS3 s3Client = new AmazonS3Client(RegionEndpoint.USWest2);
+        IAmazonSQL sqsClient = new AmazonSQSClient(RegionEndpoint.USWest2);
 
         var bucketName = "lambda-NewTemplate-".ToLower() + DateTime.Now.Ticks;
         var key = "text.txt";
@@ -50,8 +52,8 @@ public class FunctionTest
             };
 
             // Invoke the lambda function and confirm the content type was returned.
-            var functions = new Functions(s3Client);
-            var contentType = await functions.DocxUploadExtractFields(s3Event,new TestLambdaContext());
+            var functions = new Functions(s3Client, sqsClient);
+            var contentType = await functions.ExtractFields(s3Event, new TestLambdaContext());
 
             Assert.Equal("text/plain", contentType);
 

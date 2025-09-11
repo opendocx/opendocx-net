@@ -1,23 +1,44 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Transform": "AWS::Serverless-2016-10-31",
-  "Description": "Template that creates a S3 bucket and a Lambda function that will be invoked when new objects are upload to the bucket.",
+  "Description": "Lambda functions that will be invoked when new objects are uploaded to an existing bucket.",
   "Parameters": {
-    "ExistingBucketName": {
+    "BucketName": {
       "Type": "String",
-      "Description": "Name of the existing S3 bucket to trigger the Lambda function."
+      "Description": "Name of the existing S3 bucket to trigger the Lambda functions."
+    },
+    "SqsQueueArn": {
+      "Type": "String",
+      "Description": "ARN of the SQS queue to which Lambdas can send messages."
+    },
+    "ExtractFieldsLambdaName": {
+      "Type": "String",
+      "Description": "Name of the ExtractFields Lambda function.",
+      "Default": "DocxUploadExtractFields"
+    },
+    "TransformTemplateLambdaName": {
+      "Type": "String",
+      "Description": "Name of the TransformTemplate Lambda function.",
+      "Default": "DocxUploadTransformTemplate"
+    },
+    "ReplaceFieldsForPreviewLambdaName": {
+      "Type": "String",
+      "Description": "Name of the ReplaceFieldsForPreview Lambda function.",
+      "Default": "DocxUploadReplaceFieldsForPreview"
     }
   },
   "Resources": {
     "DocxUploadExtractFields": {
       "Type": "AWS::Serverless::Function",
       "Properties": {
-        "FunctionName": "DocxUploadExtractFields",
+        "FunctionName": {
+          "Ref": "ExtractFieldsLambdaName"
+        },
         "CodeUri": "",
         "Description": "Step 1 - After DOCX upload, extract and normalize field structure",
         "MemorySize": 512,
         "Timeout": 30,
-        "Handler": "NewTemplate::NewTemplate.Functions::DocxUploadExtractFields",
+        "Handler": "NewTemplate::NewTemplate.Functions::ExtractFields",
         "Runtime": "dotnet8",
         "Role": null,
         "Policies": [
@@ -39,7 +60,16 @@
                   "s3:DeleteObject"
                 ],
                 "Resource": {
-                  "Fn::Sub": "arn:aws:s3:::${ExistingBucketName}/*"
+                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                }
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage"
+                ],
+                "Resource": {
+                  "Ref": "SqsQueueArn"
                 }
               }
             ]
@@ -61,18 +91,25 @@
         },
         "RuntimeManagementConfig": {
           "UpdateRuntimeOn": "Auto"
+        },
+        "Environment": {
+          "Variables": {
+            "SQS_QUEUE_ARN": { "Ref": "SqsQueueArn" }
+          }
         }
       }
     },
     "DocxUploadTransformTemplate": {
       "Type": "AWS::Serverless::Function",
       "Properties": {
-        "FunctionName": "DocxUploadTransformTemplate",
+        "FunctionName": {
+          "Ref": "TransformTemplateLambdaName"
+        },
         "CodeUri": "",
         "Description": "Step 3 - After template fields have been parsed, translate field syntax",
         "MemorySize": 512,
         "Timeout": 30,
-        "Handler": "NewTemplate::NewTemplate.Functions::DocxUploadTransformTemplate",
+        "Handler": "NewTemplate::NewTemplate.Functions::TransformTemplate",
         "Runtime": "dotnet8",
         "Role": null,
         "Policies": [
@@ -94,7 +131,16 @@
                   "s3:DeleteObject"
                 ],
                 "Resource": {
-                  "Fn::Sub": "arn:aws:s3:::${ExistingBucketName}/*"
+                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                }
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage"
+                ],
+                "Resource": {
+                  "Ref": "SqsQueueArn"
                 }
               }
             ]
@@ -116,6 +162,81 @@
         },
         "RuntimeManagementConfig": {
           "UpdateRuntimeOn": "Auto"
+        },
+        "Environment": {
+          "Variables": {
+            "SQS_QUEUE_ARN": { "Ref": "SqsQueueArn" }
+          }
+        }
+      }
+    },
+    "DocxUploadReplaceFieldsForPreview": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ReplaceFieldsForPreviewLambdaName"
+        },
+        "CodeUri": "",
+        "Description": "Step 4 - After template normalization, replace fields to prepare for preview conversion",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Handler": "NewTemplate::NewTemplate.Functions::ReplaceFieldsForPreview",
+        "Runtime": "dotnet8",
+        "Role": null,
+        "Policies": [
+          "AWSLambda_FullAccess",
+          {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                }
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage"
+                ],
+                "Resource": {
+                  "Ref": "SqsQueueArn"
+                }
+              }
+            ]
+          }
+        ],
+        "Architectures": [
+          "x86_64"
+        ],
+        "EphemeralStorage": {
+          "Size": 512
+        },
+        "EventInvokeConfig": {
+          "MaximumEventAgeInSeconds": 21600,
+          "MaximumRetryAttempts": 2
+        },
+        "PackageType": "Zip",
+        "SnapStart": {
+          "ApplyOn": "None"
+        },
+        "RuntimeManagementConfig": {
+          "UpdateRuntimeOn": "Auto"
+        },
+        "Environment": {
+          "Variables": {
+            "SQS_QUEUE_ARN": { "Ref": "SqsQueueArn" }
+          }
         }
       }
     }

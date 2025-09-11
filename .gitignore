@@ -108,3 +108,6 @@ _ReSharper.Caches/
 
 # dev environment
 /global.json
+
+# AWS Lambda Tools configurations
+**/env-*.json

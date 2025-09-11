@@ -1,5 +1,6 @@
 using Amazon.Lambda.Core;
 using Amazon.Lambda.S3Events;
+using Amazon.SQS;
 using Amazon.S3;
 using Amazon.S3.Util;
 using Amazon.S3.Model;
@@ -17,6 +18,7 @@ namespace NewTemplate;
 public class Functions
 {
     IAmazonS3 S3Client { get; set; }
+    SqsSender SQSSender { get; set; }
 
     /// <summary>
     /// Default constructor. This constructor is used by Lambda to construct the instance. When invoked in a Lambda environment
@@ -26,25 +28,27 @@ public class Functions
     public Functions()
     {
         S3Client = new AmazonS3Client();
+        SQSSender = new SqsSender(new AmazonSQSClient());
     }
 
     /// <summary>
     /// Constructs an instance with a preconfigured S3 client. This can be used for testing the outside of the Lambda environment.
     /// </summary>
     /// <param name="s3Client">The service client to access Amazon S3.</param>
-    public Functions(IAmazonS3 s3Client)
+    public Functions(IAmazonS3 s3Client, IAmazonSQS sqsClient)
     {
         this.S3Client = s3Client;
+        this.SQSSender = new SqsSender(sqsClient);
     }
 
     /// <summary>
     /// This method is called for every Lambda invocation. This method takes in an S3 event object and can be used 
     /// to respond to S3 notifications.
     /// </summary>
-    /// <param name="evntThe event for the Lambda function handler to process.
+    /// <param name="evnt">The event for the Lambda function handler to process.</param>
     /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
     /// <returns></returns>
-    public async Task DocxUploadExtractFields(S3Event evnt, ILambdaContext context)
+    public async Task ExtractFields(S3Event evnt, ILambdaContext context)
     {
         var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
         foreach (var record in eventRecords)
@@ -56,7 +60,7 @@ public class Functions
             }
 
             string bucket = s3Event.Bucket.Name;
-            string key = s3Event.Object.Key;
+            string key = s3Event.Object.Key; // last portion should be "/template.docx", since that's what triggers this lambda
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
             string jobId = LastFolder(baseKey);
             context.Logger.Log($"Template job {jobId} uploaded; starting...");
@@ -74,33 +78,60 @@ public class Functions
                 var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
                 await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizeResult.NormalizedTemplate);
                 await PutString(bucket, baseKey + "fields.obj.json", normalizeResult.ExtractedFields);
+            }
+            catch (Exception e)
+            {
+                context.Logger.LogInformation("Failure encountered: " + e.Message);
+                if (e.StackTrace != null)
+                    context.Logger.LogInformation(e.StackTrace);
+            }
+        }
+    }
 
-                if (options.GenerateFlatPreview)
+    public async Task ReplaceFieldsForPreview(S3Event evnt, ILambdaContext context)
+    {
+        var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
+        foreach (var record in eventRecords)
+        {
+            var s3Event = record.S3;
+            if (s3Event == null)
+            {
+                continue;
+            }
+
+            string bucket = s3Event.Bucket.Name;
+            string key = s3Event.Object.Key; // last portion should be "/normalized.obj.docx", since that's what triggers this lambda
+            string baseKey = key[..(key.LastIndexOf('/') + 1)];
+            string jobId = LastFolder(baseKey);
+
+            context.Logger.Log($"Preview processing for job {jobId} starting...");
+            byte[] normalizedBytes = await GetBytes(bucket, key, context);
+
+            try
+            {
+                var previewResult = TemplateTransformer.TransformTemplate(
+                    normalizedBytes,
+                    TemplateFormat.PreviewDocx,
+                    null); // field map is ignored when output = TemplateFormat.PreviewDocx
+                if (!previewResult.HasErrors)
                 {
-                    var previewResult = TemplateTransformer.TransformTemplate(
-                        normalizeResult.NormalizedTemplate,
-                        TemplateFormat.PreviewDocx,
-                        null); // field map is ignored when output = TemplateFormat.PreviewDocx
-                    if (!previewResult.HasErrors)
-                    {
-                        context.Logger.LogInformation("Preview generated");
-                        await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
-                    }
-                    else
-                    {
-                        context.Logger.LogInformation("Preview failed to generate:\n" + string.Join('\n', previewResult.Errors));
-                    }
+                    context.Logger.LogInformation("Preview generated");
+                    await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
+                }
+                else
+                {
+                    context.Logger.LogInformation("Preview failed to generate:\n" + string.Join('\n', previewResult.Errors));
                 }
             }
             catch (Exception e)
             {
                 // some other random exception, typically an internal error
-                await RecordTemplateError(bucket, baseKey, "Lambda failed (" + e.Message + ")", e, context);
+                context.Logger.LogInformation("Preview error: " + e.Message);
             }
         }
     }
 
-    public async Task DocxUploadTransformTemplate(S3Event evnt, ILambdaContext context)
+    public async Task TransformTemplate(S3Event evnt, ILambdaContext context)
     {
         var options = new JsonSerializerOptions
         {
@@ -115,10 +146,11 @@ public class Functions
             {
                 continue;
             }
-
             string bucket = s3Event.Bucket.Name;
             string key = s3Event.Object.Key;
+            var dirs = key.Split('/');
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
+            string workspace = GetWorkspace(baseKey);
             string jobId = LastFolder(baseKey);
             string fieldDictStr = await GetString(bucket, key, context);
 
@@ -128,11 +160,18 @@ public class Functions
             var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
             if (compileResult.HasErrors)
             {
-                throw new Exception("CompileTemplate failed:\n" + string.Join('\n', compileResult.Errors));
+                // send SQS message:
+                await SQSSender.SendMessageAsync("OK", workspace, jobId, string.Join('\n', compileResult.Errors));
             }
-            await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
+            else
+            {
+                await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
+            }
             // clean up inter-lambda temp files
             await DeleteObject(bucket, key, context);
+            // TODO: maybe we should check to make sure the ReplaceFieldsForPreview lambda already got this file
+            // and began its conversion for the preview, before deleting it?  But I'm betting that has very
+            // likely already happened by now, so unless we encounter issues, let's just go ahead and clean it up:
             await DeleteObject(bucket, baseKey + "normalized.obj.docx", context);
         }
     }
@@ -222,28 +261,11 @@ public class Functions
         return trimmed[pos..];
     }
 
-    private async Task RecordTemplateError(string bucketName, string baseKey, string message, Exception? inner, ILambdaContext context)
+    private static string GetWorkspace(string key)
     {
-        context.Logger.LogInformation("Failure encountered: " + message);
-        if (inner != null)
-        {
-            context.Logger.LogInformation("  for exception: " + inner.Message);
-            if (inner.StackTrace != null)
-                context.Logger.LogInformation("  stack: " + inner.StackTrace);
-        }
-        try
-        {
-            PutObjectResponse response = await S3Client.PutObjectAsync(new PutObjectRequest
-            {
-                BucketName = bucketName,
-                Key = baseKey + (baseKey.EndsWith('/') ? "error" : "/error"),
-                ContentBody = message,
-            });
-        }
-        catch (Exception e)
-        {
-            context.Logger.LogError(e.Message);
-            context.Logger.LogError(e.StackTrace);
-        }
+        var end = key.IndexOf('/');
+        var folder1 = end == -1 ? key : key[..end];
+        var start = folder1.IndexOf('-') + 1;
+        return folder1[start..];
     }
 }

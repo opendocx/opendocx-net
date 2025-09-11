@@ -1,0 +1,8 @@
+#!/bin/bash
+case "$1" in
+  dev) config="env-dev.json" ;;
+  test) config="env-test.json" ;;
+  prod) config="env-prod.json" ;;
+  *) config="$1" ;;
+esac
+dotnet lambda deploy-serverless --config-file "$config"

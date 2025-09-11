@@ -10,7 +10,7 @@
   "configuration": "Release",
   "s3-prefix": "NewTemplate/",
   "template": "serverless.template",
-  "template-parameters": "ExistingBucketName=knackly-development",
+  "template-parameters": "BucketName=,SqsQueueArn=,ExtractFieldsLambdaName=,TransformTemplateLambdaName=,ReplaceFieldsForPreviewLambdaName=",
   "stack-name": "TemplateUploadStack",
   "s3-bucket": "docx-lambda-deployments"
 }
