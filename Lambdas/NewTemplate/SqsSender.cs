@@ -1,3 +1,4 @@
+using Amazon.Lambda.Core;
 using Amazon.SQS;
 using Amazon.SQS.Model;
 using System;
@@ -14,9 +15,9 @@ public class SqsSender
     _sqsClient = sqsClient;
   }
 
-  public async Task SendMessageAsync(string messageBody, string workspace, string jobID, string? errMessage = null)
+  public async Task SendMessageAsync(ILambdaLogger logger, string messageBody, string workspace, string jobID, string? errMessage = null)
   {
-    var queueUrl = await this.GetQueueUrl();
+    var queueUrl = await this.GetQueueUrl(logger);
     var sendMessageRequest = new SendMessageRequest
     {
       QueueUrl = queueUrl,
@@ -43,7 +44,7 @@ public class SqsSender
     await _sqsClient.SendMessageAsync(sendMessageRequest);
   }
     
-  private async Task<string> GetQueueUrl()
+  private async Task<string> GetQueueUrl(ILambdaLogger logger)
   {
     if (_sqsUrl == null)
     {
@@ -51,12 +52,17 @@ public class SqsSender
       var sqsQueueArn = Environment.GetEnvironmentVariable("SQS_QUEUE_ARN");
       if (sqsQueueArn != null)
       {
+        logger.Log("SQS Queue ARN = " + sqsQueueArn);
+        var queueName = sqsQueueArn.Split(':').Last(); // Extract queue name from ARN
+        logger.Log("requesting queue URL for queue " + queueName);
         // Use the SDK to get the URL
-        var getQueueUrlResponse = await _sqsClient.GetQueueUrlAsync(new Amazon.SQS.Model.GetQueueUrlRequest
+        var getQueueUrlResponse = await _sqsClient.GetQueueUrlAsync(new GetQueueUrlRequest
         {
-          QueueName = sqsQueueArn.Split(':').Last() // Extract queue name from ARN
+          QueueName = queueName
         });
+        logger.Log("Got response");
         _sqsUrl = getQueueUrlResponse.QueueUrl;
+        logger.Log("Queue URL is " + _sqsUrl);
       }
       else
       {

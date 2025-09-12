@@ -81,9 +81,11 @@ public class Functions
             }
             catch (Exception e)
             {
-                context.Logger.LogInformation("Failure encountered: " + e.Message);
+                context.Logger.LogError(e.Message);
                 if (e.StackTrace != null)
-                    context.Logger.LogInformation(e.StackTrace);
+                    context.Logger.LogDebug(e.StackTrace);
+                string workspace = GetWorkspace(baseKey);
+                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId, e.Message);
             }
         }
     }
@@ -161,7 +163,7 @@ public class Functions
             if (compileResult.HasErrors)
             {
                 // send SQS message:
-                await SQSSender.SendMessageAsync("OK", workspace, jobId, string.Join('\n', compileResult.Errors));
+                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId, string.Join('\n', compileResult.Errors));
             }
             else
             {
