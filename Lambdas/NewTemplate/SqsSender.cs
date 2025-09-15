@@ -33,14 +33,17 @@ public class SqsSender
                 {
                     DataType = "String",
                     StringValue = jobID
-                },
-                ["error"] = new MessageAttributeValue
-                {
-                    DataType = "String",
-                    StringValue = errMessage ?? string.Empty
                 }
             }
     };
+    if (errMessage != null)
+    {
+      sendMessageRequest.MessageAttributes.Add("error", new MessageAttributeValue
+      {
+        DataType = "String",
+        StringValue = errMessage
+      });
+    }
     await _sqsClient.SendMessageAsync(sendMessageRequest);
   }
     

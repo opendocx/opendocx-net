@@ -78,14 +78,17 @@ public class Functions
                 var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
                 await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizeResult.NormalizedTemplate);
                 await PutString(bucket, baseKey + "fields.obj.json", normalizeResult.ExtractedFields);
+                // we do NOT report success via SQS, because subsequent lambdas should automatically be
+                // triggered by creation of the above objects.
             }
             catch (Exception e)
             {
                 context.Logger.LogError(e.Message);
                 if (e.StackTrace != null)
                     context.Logger.LogDebug(e.StackTrace);
+                // send SQS message with error info:
                 string workspace = GetWorkspace(baseKey);
-                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId, e.Message);
+                await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
             }
         }
     }
@@ -119,16 +122,19 @@ public class Functions
                 {
                     context.Logger.LogInformation("Preview generated");
                     await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
+                    // we do NOT report success via SQS, because the previews are not required for basic functionality
                 }
                 else
                 {
                     context.Logger.LogInformation("Preview failed to generate:\n" + string.Join('\n', previewResult.Errors));
+                    // we do NOT report errors via SQS, because the previews are not required for basic functionality
                 }
             }
             catch (Exception e)
             {
                 // some other random exception, typically an internal error
                 context.Logger.LogInformation("Preview error: " + e.Message);
+                // we do NOT report errors via SQS, because the previews are not required for basic functionality
             }
         }
     }
@@ -162,12 +168,15 @@ public class Functions
             var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
             if (compileResult.HasErrors)
             {
-                // send SQS message:
-                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId, string.Join('\n', compileResult.Errors));
+                // send SQS message with error info:
+                var errMsg = string.Join('\n', compileResult.Errors);
+                await SQSSender.SendMessageAsync(context.Logger, "Error: " + errMsg, workspace, jobId, errMsg);
             }
             else
             {
                 await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
+                // send SQS message for success
+                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId);
             }
             // clean up inter-lambda temp files
             await DeleteObject(bucket, key, context);
