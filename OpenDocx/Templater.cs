@@ -37,6 +37,21 @@ namespace OpenDocx
 
     public static class Templater
     {
+        public static Dictionary<string, ParsedField> ParseFieldsToDict(string extractedFields)
+        {
+            var fieldList = JsonNode.Parse(extractedFields);
+            // this "dumb" implementation creates a simple template AST, but it does not bother parsing
+            // the expressions inside individual fields. A complete implementation would do that, so it
+            // could check for errors inside fields!
+            var ast = FieldParser.ParseContentArray(fieldList as JsonArray);
+            // create a map from field ID (for DOCX, basially, field number) to nodes in the AST
+            var fieldDict = new Dictionary<string, ParsedField>();
+            var atoms = new FieldExprNamer();
+            FieldParser.BuildFieldDictionary(ast, fieldDict, atoms); // this also atomizes expressions in fields
+            // note: it ALSO mutates ast, adding atom annotations for expressions
+            return fieldDict;
+        }
+
         public static ParseFieldsResult ParseFields(string extractedFields, bool generateLegacyLogicModule = false)
         {
             var fieldList = JsonNode.Parse(extractedFields);

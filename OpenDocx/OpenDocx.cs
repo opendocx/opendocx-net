@@ -63,10 +63,8 @@ namespace OpenDocx
             WriteIndented = false,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            Converters =
-                    {
-                        new JsonStringEnumConverter()
-                    },
+            Converters = { new JsonStringEnumConverter() },
+            NumberHandling = JsonNumberHandling.AllowReadingFromString,
         };
 
         public class NormalizeDocxResult

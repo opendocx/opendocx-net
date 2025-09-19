@@ -9,11 +9,12 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using OpenDocx;
 using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
+using Peg.Base;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
 
-namespace NewTemplate;
+namespace DocxTemplater;
 
 public class Functions
 {
@@ -48,7 +49,7 @@ public class Functions
     /// <param name="evnt">The event for the Lambda function handler to process.</param>
     /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
     /// <returns></returns>
-    public async Task ExtractFields(S3Event evnt, ILambdaContext context)
+    public async Task PrepareDocxTemplate(S3Event evnt, ILambdaContext context)
     {
         var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
         foreach (var record in eventRecords)
@@ -62,10 +63,13 @@ public class Functions
             string bucket = s3Event.Bucket.Name;
             string key = s3Event.Object.Key; // last portion should be "/template.docx", since that's what triggers this lambda
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
+            string workspace = GetWorkspace(baseKey);
             string jobId = LastFolder(baseKey);
             context.Logger.Log($"Template job {jobId} uploaded; starting...");
+            context.Logger.Log("Retrieving template from S3...");
             byte[] docxBytes = await GetBytes(bucket, key, context);
-
+            context.Logger.Log("Template retrieved successfully; normalizing...");
+            byte[] normalizedBytes;
             try
             {
                 var options = new PrepareTemplateOptions()
@@ -76,10 +80,25 @@ public class Functions
                 };
 
                 var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
-                await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizeResult.NormalizedTemplate);
-                await PutString(bucket, baseKey + "fields.obj.json", normalizeResult.ExtractedFields);
-                // we do NOT report success via SQS, because subsequent lambdas should automatically be
-                // triggered by creation of the above objects.
+                normalizedBytes = normalizeResult.NormalizedTemplate;
+                // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
+                context.Logger.Log("Template normalized; building field dictionary...");
+                var fieldDict = Templater.ParseFieldsToDict(normalizeResult.ExtractedFields);
+                context.Logger.Log("Storing field dictionary in S3...");
+                await PutString(bucket, baseKey + "fields.dict.json",
+                    JsonSerializer.Serialize(fieldDict, OpenDocx.OpenDocx.DefaultJsonOptions));
+                context.Logger.Log("Field dictionary stored (so other processes can use it); transforming docx to oxpt...");
+                var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
+                if (compileResult.HasErrors)
+                {
+                    throw new Exception("Error while transforming DOCX:\n"
+                        + string.Join('\n', compileResult.Errors));
+                }
+                context.Logger.Log("DOCX transformed; storing oxpt.docx in S3...");
+                await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
+                context.Logger.Log("oxpt.docx stored; sending success message to SQS...");
+                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId);
+                context.Logger.Log("Success");
             }
             catch (Exception e)
             {
@@ -87,31 +106,12 @@ public class Functions
                 if (e.StackTrace != null)
                     context.Logger.LogDebug(e.StackTrace);
                 // send SQS message with error info:
-                string workspace = GetWorkspace(baseKey);
                 await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
+                return;
             }
-        }
-    }
-
-    public async Task ReplaceFieldsForPreview(S3Event evnt, ILambdaContext context)
-    {
-        var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
-        foreach (var record in eventRecords)
-        {
-            var s3Event = record.S3;
-            if (s3Event == null)
-            {
-                continue;
-            }
-
-            string bucket = s3Event.Bucket.Name;
-            string key = s3Event.Object.Key; // last portion should be "/normalized.obj.docx", since that's what triggers this lambda
-            string baseKey = key[..(key.LastIndexOf('/') + 1)];
-            string jobId = LastFolder(baseKey);
-
-            context.Logger.Log($"Preview processing for job {jobId} starting...");
-            byte[] normalizedBytes = await GetBytes(bucket, key, context);
-
+            // the following is OUTSIDE the above try/catch block, because we intentionally
+            // do NOT want to report SQS whether it succeeds or fails.
+            context.Logger.Log("Now replacing docx fields prior to markdown conversion...");
             try
             {
                 var previewResult = TemplateTransformer.TransformTemplate(
@@ -120,7 +120,7 @@ public class Functions
                     null); // field map is ignored when output = TemplateFormat.PreviewDocx
                 if (!previewResult.HasErrors)
                 {
-                    context.Logger.LogInformation("Preview generated");
+                    context.Logger.LogInformation("Preview generated; storing preview.obj.docx to S3...");
                     await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
                     // we do NOT report success via SQS, because the previews are not required for basic functionality
                 }
@@ -134,56 +134,7 @@ public class Functions
             {
                 // some other random exception, typically an internal error
                 context.Logger.LogInformation("Preview error: " + e.Message);
-                // we do NOT report errors via SQS, because the previews are not required for basic functionality
             }
-        }
-    }
-
-    public async Task TransformTemplate(S3Event evnt, ILambdaContext context)
-    {
-        var options = new JsonSerializerOptions
-        {
-            Converters = { new JsonStringEnumConverter() },
-            NumberHandling = JsonNumberHandling.AllowReadingFromString
-        };
-        var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
-        foreach (var record in eventRecords)
-        {
-            var s3Event = record.S3;
-            if (s3Event == null)
-            {
-                continue;
-            }
-            string bucket = s3Event.Bucket.Name;
-            string key = s3Event.Object.Key;
-            var dirs = key.Split('/');
-            string baseKey = key[..(key.LastIndexOf('/') + 1)];
-            string workspace = GetWorkspace(baseKey);
-            string jobId = LastFolder(baseKey);
-            string fieldDictStr = await GetString(bucket, key, context);
-
-            // we also need to re-retrieve the normalized template (stored in step 1)
-            byte[] normalizedBytes = await GetBytes(bucket, baseKey + "normalized.obj.docx", context);
-            var fieldDict = JsonSerializer.Deserialize<Dictionary<string, ParsedField>>(fieldDictStr, options);
-            var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
-            if (compileResult.HasErrors)
-            {
-                // send SQS message with error info:
-                var errMsg = string.Join('\n', compileResult.Errors);
-                await SQSSender.SendMessageAsync(context.Logger, "Error: " + errMsg, workspace, jobId, errMsg);
-            }
-            else
-            {
-                await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
-                // send SQS message for success
-                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId);
-            }
-            // clean up inter-lambda temp files
-            await DeleteObject(bucket, key, context);
-            // TODO: maybe we should check to make sure the ReplaceFieldsForPreview lambda already got this file
-            // and began its conversion for the preview, before deleting it?  But I'm betting that has very
-            // likely already happened by now, so unless we encounter issues, let's just go ahead and clean it up:
-            await DeleteObject(bucket, baseKey + "normalized.obj.docx", context);
         }
     }
 

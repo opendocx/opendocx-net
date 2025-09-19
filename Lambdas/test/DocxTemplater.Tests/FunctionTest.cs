@@ -11,7 +11,7 @@ using Amazon.S3.Util;
 using Amazon.SQS;
 using System.Collections.Generic;
 
-namespace NewTemplate.Tests;
+namespace DocxTemplater.Tests;
 
 public class FunctionTest
 {

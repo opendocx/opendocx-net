@@ -10,7 +10,7 @@
   "configuration": "Release",
   "s3-prefix": "NewTemplate/",
   "template": "serverless.template",
-  "template-parameters": "BucketName=,SqsQueueArn=,ExtractFieldsLambdaName=,TransformTemplateLambdaName=,ReplaceFieldsForPreviewLambdaName=",
-  "stack-name": "TemplateUploadStack",
+  "template-parameters": "BucketName=,SqsQueueArn=,PrepareDocxLambdaName=",
+  "stack-name": "DocxUploadStack",
   "s3-bucket": "docx-lambda-deployments"
 }

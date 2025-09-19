@@ -11,7 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "odx", "odx\odx.csproj", "{1
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lambdas", "Lambdas", "{60E4E9C2-ACA2-4F9A-877E-CDDB7DD642D8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewTemplate", "Lambdas\NewTemplate\NewTemplate.csproj", "{36C6D118-F2C4-4767-947B-0E173A6E1286}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocxTemplater", "Lambdas\DocxTemplater\DocxTemplater.csproj", "{36C6D118-F2C4-4767-947B-0E173A6E1286}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -15,6 +15,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\NewTemplate\NewTemplate.csproj" />
+    <ProjectReference Include="..\..\DocxTemplater\DocxTemplater.csproj" />
   </ItemGroup>
 </Project>
