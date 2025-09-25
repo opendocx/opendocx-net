@@ -68,7 +68,7 @@ public class Functions
             context.Logger.Log($"Template job {jobId} uploaded; starting...");
             context.Logger.Log("Retrieving template from S3...");
             byte[] docxBytes = await GetBytes(bucket, key, context);
-            context.Logger.Log("Template retrieved successfully; normalizing...");
+            context.Logger.Log("Template retrieved successfully; normalizing (step 1A)...");
             byte[] normalizedBytes;
             try
             {
@@ -82,12 +82,15 @@ public class Functions
                 var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
                 normalizedBytes = normalizeResult.NormalizedTemplate;
                 // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
-                context.Logger.Log("Template normalized; building field dictionary...");
+                context.Logger.Log("Template normalized; building field dictionary (step 1B)...");
                 var fieldDict = Templater.ParseFieldsToDict(normalizeResult.ExtractedFields);
                 context.Logger.Log("Storing field dictionary in S3...");
                 await PutString(bucket, baseKey + "fields.dict.json",
                     JsonSerializer.Serialize(fieldDict, OpenDocx.OpenDocx.DefaultJsonOptions));
-                context.Logger.Log("Field dictionary stored (so other processes can use it); transforming docx to oxpt...");
+                context.Logger.Log("Field dictionary stored (so other processes can use it); sending OK1 to SQS...");
+                await SQSSender.SendMessageAsync(context.Logger, "OK1", workspace, jobId);
+
+                context.Logger.Log("Transforming docx to oxpt (step 1C)...");
                 var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
                 if (compileResult.HasErrors)
                 {
@@ -96,8 +99,8 @@ public class Functions
                 }
                 context.Logger.Log("DOCX transformed; storing oxpt.docx in S3...");
                 await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
-                context.Logger.Log("oxpt.docx stored; sending success message to SQS...");
-                await SQSSender.SendMessageAsync(context.Logger, "OK", workspace, jobId);
+                context.Logger.Log("oxpt.docx stored; sending OK2 message to SQS...");
+                await SQSSender.SendMessageAsync(context.Logger, "OK2", workspace, jobId);
                 context.Logger.Log("Success");
             }
             catch (Exception e)
@@ -111,7 +114,7 @@ public class Functions
             }
             // the following is OUTSIDE the above try/catch block, because we intentionally
             // do NOT want to report SQS whether it succeeds or fails.
-            context.Logger.Log("Now replacing docx fields prior to markdown conversion...");
+            context.Logger.Log("Now replacing docx fields prior to markdown conversion (step 1D)...");
             try
             {
                 var previewResult = TemplateTransformer.TransformTemplate(

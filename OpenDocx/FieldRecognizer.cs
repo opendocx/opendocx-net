@@ -35,7 +35,8 @@ namespace OpenDocx
             } else {
                 throw new ArgumentException("Field recognizer requires even-length embedDelims");
             }
-            Regex = new Regex(Regex.Escape(CombinedBegin) + ".*?" + Regex.Escape(CombinedEnd));
+            Regex = new Regex(Regex.Escape(CombinedBegin) + ".*?" + Regex.Escape(CombinedEnd),
+                RegexOptions.Compiled | RegexOptions.CultureInvariant);
         }
 
         public bool IsField(string content, out string fieldText)
