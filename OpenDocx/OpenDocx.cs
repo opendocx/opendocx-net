@@ -27,6 +27,7 @@ namespace OpenDocx
         public bool GenerateLegacyLogicModule { get; set; }
         public bool RemoveCustomProperties { get; set; }
         public List<string> KeepPropertyNames { get; set; }
+        public bool HasContentControlFields { get; set; }
 
         public PrepareTemplateOptions(bool removeCustomProperties = true, List<string> keepPropertyNames = null, bool generateFlatPreview = false, bool generateLogicTree = true, bool generateLegacyModule = false)
         {
@@ -99,8 +100,8 @@ namespace OpenDocx
         // work performed by 'prepare template: stage 1' lambda:
         public static NormalizeDocxResult NormalizeDocx(byte[] docxBytes, PrepareTemplateOptions options)
         {
-            var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes,
-                options.RemoveCustomProperties, options.KeepPropertyNames);
+            var normalizeResult = Normalizer.NormalizeTemplate(docxBytes,
+                options.RemoveCustomProperties, options.KeepPropertyNames, null, options.HasContentControlFields);
             byte[] previewBytes = null;
             string previewError = null;
 

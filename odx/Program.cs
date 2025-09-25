@@ -187,44 +187,30 @@ namespace OpenDocx.CommandLine
                     byte[] docxBytes;
                     byte[] normalizedBytes;
                     string rawFields;
-                    string normalizedPath1 = Path.Combine(outFile, "normalized1.obj.docx");
-                    string normalizedPath2 = Path.Combine(outFile, "normalized2.obj.docx");
-                    string rawFieldPath1 = Path.Combine(outFile, "fields1.obj.json");
-                    string rawFieldPath2 = Path.Combine(outFile, "fields2.obj.json");
-                    if (prepareMode || wantNormalize || !File.Exists(normalizedPath2))
+                    string normalizedPath = Path.Combine(outFile, "normalized.obj.docx");
+                    string rawFieldPath = Path.Combine(outFile, "fields.obj.json");
+                    if (prepareMode || wantNormalize || !File.Exists(normalizedPath))
                     {
                         // read template into memory
                         docxBytes = await File.ReadAllBytesAsync(inFile);
                         Console.WriteLine("Template retrieved successfully; normalizing (step 1A) using NEW algorithm...");
                         var start = DateTime.Now;
                         var normalizeResult = Normalizer.NormalizeTemplate(docxBytes, true, new List<string>() { "UpdateFields", "PlayMacros" });
-                        Console.WriteLine($"  NEW Normalization took {(DateTime.Now - start).TotalSeconds:F1} seconds");
+                        Console.WriteLine($"  Normalization took {(DateTime.Now - start).TotalSeconds:F1} seconds");
                         normalizedBytes = normalizeResult.NormalizedTemplate;
                         rawFields = normalizeResult.ExtractedFields;
                         if (!prepareMode)
                         {
                             Directory.CreateDirectory(outFile);
-                            await File.WriteAllBytesAsync(normalizedPath1, normalizedBytes);
-                            await File.WriteAllTextAsync(rawFieldPath1, rawFields);
-                        }
-                        Console.WriteLine("normalizing (step 1A) using ORIGINAL algorithm...");
-                        start = DateTime.Now;
-                        normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, true, new List<string>() { "UpdateFields", "PlayMacros" });
-                        Console.WriteLine($"  OLD Normalization took {(DateTime.Now - start).TotalSeconds:F1} seconds");
-                        normalizedBytes = normalizeResult.NormalizedTemplate;
-                        rawFields = normalizeResult.ExtractedFields;
-                        if (!prepareMode)
-                        {
-                            Directory.CreateDirectory(outFile);
-                            await File.WriteAllBytesAsync(normalizedPath2, normalizedBytes);
-                            await File.WriteAllTextAsync(rawFieldPath2, rawFields);
+                            await File.WriteAllBytesAsync(normalizedPath, normalizedBytes);
+                            await File.WriteAllTextAsync(rawFieldPath, rawFields);
                         }
                         Console.Write("Template normalized; ");
                     }
                     else
                     {
-                        normalizedBytes = await File.ReadAllBytesAsync(normalizedPath2);
-                        rawFields = await File.ReadAllTextAsync(rawFieldPath2);
+                        normalizedBytes = await File.ReadAllBytesAsync(normalizedPath);
+                        rawFields = await File.ReadAllTextAsync(rawFieldPath);
                         Console.Write("Normalized template retrieved successfully; ");
                     }
                     Dictionary<string, ParsedField> fieldDict = null;

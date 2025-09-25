@@ -37,32 +37,36 @@ namespace OpenDocx
 {
     public class Normalizer
     {
-        // public static FieldExtractResult ExtractFields(string templateFileName,
-        //     bool removeCustomProperties = true, IEnumerable<string> keepPropertyNames = null,
-        //     string fieldDelimiters = null)
-        // {
-        //     string newTemplateFileName = templateFileName + "obj.docx";
-        //     string outputFile = templateFileName + "obj.json";
-        //     WmlDocument templateDoc = new WmlDocument(templateFileName); // just reads the template's bytes into memory (that's all), read-only
+        /// <summary>
+        /// For legacy/testing only
+        /// </summary>
+        public static FieldExtractResult ExtractFields(string templateFileName,
+            bool removeCustomProperties = true, IEnumerable<string> keepPropertyNames = null,
+            string fieldDelimiters = null, bool contentControls = false)
+        {
+            string newTemplateFileName = templateFileName + "obj.docx";
+            string outputFile = templateFileName + "obj.json";
+            WmlDocument templateDoc = new WmlDocument(templateFileName); // just reads the template's bytes into memory (that's all), read-only
 
-        //     var result = NormalizeTemplate(templateDoc.DocumentByteArray, removeCustomProperties, keepPropertyNames, fieldDelimiters);
-        //     // save the output (even in the case of error, since error messages are in the file)
-        //     var preprocessedTemplate = new WmlDocument(newTemplateFileName, result.NormalizedTemplate);
-        //     preprocessedTemplate.Save();
-        //     // also save extracted fields
-        //     File.WriteAllText(outputFile, result.ExtractedFields);
-        //     return new FieldExtractResult(newTemplateFileName, outputFile);
-        // }
+            var result = NormalizeTemplate(templateDoc.DocumentByteArray, removeCustomProperties, keepPropertyNames,
+                fieldDelimiters, contentControls);
+            // save the output (even in the case of error, since error messages may be in the file?? Not sure about this!)
+            var preprocessedTemplate = new WmlDocument(newTemplateFileName, result.NormalizedTemplate);
+            preprocessedTemplate.Save();
+            // also save extracted fields
+            File.WriteAllText(outputFile, result.ExtractedFields);
+            return new FieldExtractResult(newTemplateFileName, outputFile);
+        }
 
         public static NormalizeResult NormalizeTemplate(byte[] templateBytes, bool removeCustomProperties = true,
-            IEnumerable<string> keepPropertyNames = null, string fieldDelimiters = null)
+            IEnumerable<string> keepPropertyNames = null, string fieldDelimiters = null, bool contentControls = false)
         {
             var fieldAccumulator = new FieldAccumulator();
             var recognizer = FieldRecognizer.Default;
             OpenSettings openSettings = new OpenSettings();
-            if (!string.IsNullOrWhiteSpace(fieldDelimiters))
+            if (!string.IsNullOrWhiteSpace(fieldDelimiters) || contentControls)
             {
-                recognizer = new FieldRecognizer(fieldDelimiters, null);
+                recognizer = new FieldRecognizer(fieldDelimiters ?? "[]", contentControls ? "cc" : null);
                 // commented out, because this causes corruption in some templates??
                 // openSettings.MarkupCompatibilityProcessSettings =
                 //     new MarkupCompatibilityProcessSettings(
@@ -89,14 +93,15 @@ namespace OpenDocx
             }
         }
 
-        public static string ExtractFieldsOnly(byte[] docxBytes, string fieldDelimiters = null)
+        public static string ExtractFieldsOnly(byte[] docxBytes, string fieldDelimiters = null,
+            bool contentControls = false)
         {
             var fieldAccumulator = new FieldAccumulator();
             var recognizer = FieldRecognizer.Default;
             OpenSettings openSettings = new OpenSettings();
-            if (!string.IsNullOrWhiteSpace(fieldDelimiters))
+            if (!string.IsNullOrWhiteSpace(fieldDelimiters) || contentControls)
             {
-                recognizer = new FieldRecognizer(fieldDelimiters, null);
+                recognizer = new FieldRecognizer(fieldDelimiters ?? "[]", contentControls ? "cc" : null);
             }
             using (MemoryStream mem = new MemoryStream())
             {
@@ -193,9 +198,9 @@ namespace OpenDocx
             {
                 if (element.Name == W.sdt)
                 {
-                    throw new Exception("Content controls not currently supported in templates - please contact Support");
+                    return ProcessContentControl(element, recognizer, fieldAccumulator, comments);
                 }
-                if (element.Name == W.p)
+                else if (element.Name == W.p)
                 {
                     fieldAccumulator.BeginBlock();
                     var transformedPara = ProcessParagraphContent(element, recognizer, fieldAccumulator, comments);
@@ -220,6 +225,60 @@ namespace OpenDocx
             return node;
         }
 
+        private static XElement ProcessContentControl(XElement element, FieldRecognizer recognizer,
+            FieldAccumulator fieldAccumulator, CommentReader comments)
+        {
+            if (recognizer.ContentControlEmbedding)
+            {
+                var alias = (string)element.Elements(W.sdtPr).Elements(W.alias).Attributes(W.val).FirstOrDefault();
+                if (alias == null || alias == "") // if there's an alias, don't treat it as a field (?)
+                {
+                    var ccContents = ExtractTextContent(element)
+                        .CleanUpInvalidCharacters();
+                    if (recognizer.IsField(ccContents, out ccContents))
+                    {
+                        //var isBlockLevel = element.Element(W.sdtContent).Elements(W.p).FirstOrDefault() != null;
+                        var newCC = new XElement(element.Name, element.Attributes());
+                        var props = element.Elements(W.sdtPr).FirstOrDefault();
+                        if (props == null)
+                            props = new XElement(W.sdtPr);
+                        else
+                            props.Remove();
+                        newCC.Add(props);
+                        var tagElem = props.Elements(W.tag).FirstOrDefault();
+                        if (tagElem == null)
+                        {
+                            tagElem = new XElement(W.tag);
+                            props.Add(tagElem);
+                        }
+                        if (comments != null) {
+                            var commentRef = element.Descendants(W.commentReference).FirstOrDefault();
+                            if (commentRef != null) {
+                                var idAttr = commentRef.Attribute(W.id)?.Value;
+                                if (idAttr != null && comments.TryGetValue(idAttr, out var comment)) {
+                                    if (!string.IsNullOrEmpty(comment)) {
+                                        ccContents += "@@@COMMENT@@@" + comment;
+                                    }
+                                }
+                            }
+                        }
+                        var fieldId = fieldAccumulator.AddField(ccContents);
+                        tagElem.SetAttributeValue(W.val, fieldId);
+                        newCC.Add(element.Nodes());
+                        return newCC;
+                    }
+                }
+            }
+            // fall-back -- IF
+            //   * we're expecting fields in content controls, but the cc has an alias (i.e. it's not a field)
+            //   * we're expecting fields in content controls, but the cc is otherwise not recognized as a field
+            //   * we're NOT expecting fields in content controls
+            // THEN process the content control's contents to see if there are fields in there
+            return new XElement(element.Name,
+                element.Attributes(),
+                element.Nodes().Select(n => IdentifyAndNormalizeFields(n, recognizer, fieldAccumulator, comments)));
+        }
+
         private static XElement ProcessParagraphContent(XElement element, FieldRecognizer recognizer,
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
@@ -231,13 +290,19 @@ namespace OpenDocx
 
             // STEP 1: PRE-SPLIT RUNS (pure functional transform) so field boundaries align with run boundaries
             var paragraphWithSplitRuns = PreSplitRunsForFields(element, recognizer);
-            
+
             // STEP 2: Now it's easier to use simple tree modification for appropriate run replacement
             return ProcessParagraphWithAlignedRuns(paragraphWithSplitRuns, recognizer, fieldAccumulator, comments);
         }
 
         private static XElement PreSplitRunsForFields(XElement paragraph, FieldRecognizer recognizer)
         {
+            if (recognizer.ContentControlEmbedding)
+            {
+                // No text-based field splitting needed - fields are already in content controls
+                return paragraph;
+            }
+
             // Get all field match positions
             var paraContents = ExtractTextContent(paragraph);
             var matches = recognizer.Regex.Matches(paraContents);
@@ -439,6 +504,15 @@ namespace OpenDocx
         private static XElement ProcessParagraphWithAlignedRuns(XElement paragraph, FieldRecognizer recognizer,
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
+            if (recognizer.ContentControlEmbedding)
+            {
+                // continuing recursion will encounter existing content controls instead of looking for text matches
+                var transformedParaContent = paragraph.Nodes()
+                    .Select(n => IdentifyAndNormalizeFields(n, recognizer, fieldAccumulator, comments))
+                    .ToArray();
+                return new XElement(paragraph.Name, paragraph.Attributes(), transformedParaContent);
+            }
+
             var paraContents = ExtractTextContent(paragraph);
             var matches = recognizer.Regex.Matches(paraContents);
 

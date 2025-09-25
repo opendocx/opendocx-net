@@ -15,20 +15,31 @@ namespace OpenDocx
         public string CombinedBegin => EmbedBegin + FieldBegin;
         public string CombinedEnd => FieldEnd + EmbedEnd;
 
+        public bool ContentControlEmbedding => _contentControls;
+
         public int EmbedBeginLength => EmbedBegin.Length;
         public int EmbedDelimLength => EmbedBegin.Length + EmbedEnd.Length;
         public Regex Regex;
 
+        private readonly bool _contentControls;
+
         public FieldRecognizer(string fieldDelims = "[]", string embedDelims = "{}") {
-            if (!string.IsNullOrEmpty(fieldDelims) && fieldDelims.Length % 2 == 0) {
+            _contentControls = false;
+            if (!string.IsNullOrEmpty(fieldDelims) && fieldDelims.Length % 2 == 0)
+            {
                 FieldBegin = fieldDelims.Substring(0, fieldDelims.Length / 2);
                 FieldEnd = fieldDelims.Substring(fieldDelims.Length / 2, fieldDelims.Length - 1);
-            } else {
+            }
+            else
+            {
                 throw new ArgumentException("Field recognizer requires even-length fieldDelims");
             }
-            if (string.IsNullOrEmpty(embedDelims)) {
+            if (string.IsNullOrEmpty(embedDelims) || embedDelims == "cc") {
                 EmbedBegin = string.Empty;
                 EmbedEnd = string.Empty;
+                if (embedDelims == "cc") {
+                    _contentControls = true;
+                }
             } else if (embedDelims.Length % 2 == 0) {
                 EmbedBegin = embedDelims.Substring(0, embedDelims.Length / 2);
                 EmbedEnd = embedDelims.Substring(embedDelims.Length / 2, embedDelims.Length - 1);

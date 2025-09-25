@@ -8,6 +8,7 @@ using System.Xml.Linq;
 using DocumentFormat.OpenXml.Packaging;
 using OpenXmlPowerTools;
 using OpenDocx;
+using FieldExtractor = OpenDocx.Normalizer; // instead of old/legacy field extractor!
 using Xunit;
 using Xunit.Abstractions;
 using System.Dynamic;
@@ -16,7 +17,6 @@ using System.Text.Json.Nodes;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
 using System.Text.Json.Serialization;
-using static OpenXmlPowerTools.DocumentAssembler;
 using System.Xml.Schema;
 
 namespace OpenDocxTemplater.Tests
@@ -30,8 +30,21 @@ namespace OpenDocxTemplater.Tests
             this.output = output;
         }
 
+        private static readonly string[] ContentControlTemplates =
+        {
+            "nested.docx",
+            "Married RLT Plain.docx",
+            "SimpleWill.docx",
+            "loandoc_example.docx",
+            "redundant_ifs.docx",
+            "list_punc_fmt.docx",
+            "team_report.docx",
+            "Lists.docx",
+        };
+
         private TemplateTransformResult DoCompileTemplate(string sourceTemplatePath)
         {
+            // NOTE: doesn't currently support test templates with content controls
             var normalizeResult = FieldExtractor.NormalizeTemplate(File.ReadAllBytes(sourceTemplatePath));
 
             var fieldList = JsonNode.Parse(normalizeResult.ExtractedFields);
@@ -68,10 +81,12 @@ namespace OpenDocxTemplater.Tests
             //Assert.False(transformResult.HasErrors);
             var prepareResult = OpenDocx.OpenDocx.PrepareTemplate(
                 File.ReadAllBytes(sourceTemplatePath),
-                new PrepareTemplateOptions() {
+                new PrepareTemplateOptions()
+                {
                     GenerateFlatPreview = true,
                     GenerateLogicTree = true,
-                    GenerateLegacyLogicModule = true
+                    GenerateLegacyLogicModule = true,
+                    HasContentControlFields = ContentControlTemplates.Contains(name),
                 }
             );
             DirectoryInfo destDir = new DirectoryInfo("../../../../test/history/");
@@ -135,6 +150,8 @@ namespace OpenDocxTemplater.Tests
         //[InlineData("crasher.docx", "")]
         public void CompileErrors(string name, string message)
         {
+            if (ContentControlTemplates.Contains(name))
+                throw new Exception("Case not handled");
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             var sourceTemplatePath = Path.Combine(sourceDir.FullName, name);
             var ex = Assert.Throws<FieldParseException>(() => DoCompileTemplate(sourceTemplatePath));
@@ -201,7 +218,8 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName, true, null, null,
+                ContentControlTemplates.Contains(name));
             Assert.True(File.Exists(extractResult.ExtractedFields));
             Assert.True(File.Exists(extractResult.TempTemplate));
             return extractResult;
@@ -378,7 +396,8 @@ namespace OpenDocxTemplater.Tests
             FileInfo outputDocx = new FileInfo(Path.Combine(destDir.FullName, "conv_" + name));
             string templateName = outputDocx.FullName;
             templateDocx.CopyTo(templateName, true);
-            var extractResult = FieldExtractor.ExtractFields(templateName);
+            var extractResult = FieldExtractor.ExtractFields(templateName, true, null, null,
+                ContentControlTemplates.Contains(name));
             Assert.True(File.Exists(extractResult.TempTemplate));
 
             var remover = new CCRemover();
