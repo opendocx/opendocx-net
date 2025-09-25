@@ -25,7 +25,8 @@
       "preLaunchTask": "build",
       // If you have changed target frameworks, make sure to update the program path.
       "program": "${workspaceFolder}/odx/bin/Debug/net6.0/odx.dll",
-      //"args": ["test.cmp", "test.csv"],
+      //"args": ["/Users/x/test.docx", "--normalize"],
+      //"args": ["${workspaceFolder}/test/templates/normalized1.obj.docx", "--verify"],
       "cwd": "${workspaceFolder}/odx/bin/Debug/net6.0/",
       // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
       "console": "internalConsole",

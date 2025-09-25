@@ -1,6 +1,6 @@
 ﻿/***************************************************************************
 
-Copyright (c) Lowell Stewart 2019-2023.
+Copyright (c) Lowell Stewart 2019-2025.
 Licensed under the Mozilla Public License. See LICENSE file in the project root for full license information.
 
 Published at https://github.com/opendocx/opendocx
@@ -229,10 +229,10 @@ namespace OpenDocx
                 return ProcessContentNoFields(element, recognizer, fieldAccumulator, comments);
             }
 
-            // PRE-SPLIT RUNS so field boundaries align with run boundaries
+            // STEP 1: PRE-SPLIT RUNS (pure functional transform) so field boundaries align with run boundaries
             var paragraphWithSplitRuns = PreSplitRunsForFields(element, recognizer);
             
-            // Now we can process with simple run replacement
+            // STEP 2: Now it's easier to use simple tree modification for appropriate run replacement
             return ProcessParagraphWithAlignedRuns(paragraphWithSplitRuns, recognizer, fieldAccumulator, comments);
         }
 
@@ -241,9 +241,9 @@ namespace OpenDocx
             // Get all field match positions
             var paraContents = ExtractTextContent(paragraph);
             var matches = recognizer.Regex.Matches(paraContents);
-    
+
             if (matches.Count == 0) return paragraph;
-    
+
             // Collect all positions where we need to split runs
             var splitPositions = new HashSet<int>();
             foreach (Match match in matches.Cast<Match>())
@@ -251,74 +251,180 @@ namespace OpenDocx
                 splitPositions.Add(match.Index);           // Start of field
                 splitPositions.Add(match.Index + match.Length); // End of field
             }
-    
-            // Split runs at these positions
-            return SplitRunsAtPositions(paragraph, splitPositions.OrderBy(x => x).ToList());
+
+            var orderedSplitPositions = splitPositions.OrderBy(x => x).ToList();
+
+            // Pure functional transform: transform each node, returning 1 or more nodes
+            var result = TransformNodeForSplitting(paragraph, orderedSplitPositions, 0);
+            return (XElement)result.Nodes.Single();
         }
 
-        private static XElement SplitRunsAtPositions(XElement paragraph, List<int> splitPositions)
+        private static TransformResult TransformNodeForSplitting(XElement element, List<int> splitPositions, int currentPosition)
         {
-            if (splitPositions.Count == 0) return paragraph;
-    
-            var runs = paragraph.DescendantsTrimmed(W.txbxContent)
-                .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
-                .ToList();
-    
-            var newRuns = new List<XElement>();
-            int currentPosition = 0;
-    
-            foreach (var run in runs)
+            if (element.Name == W.r)
             {
-                var runText = UnicodeMapper.RunToString(run);
-                if (string.IsNullOrEmpty(runText))
-                {
-                    newRuns.Add(run);
-                    continue;
-                }
-    
-                var runProperties = run.Elements(W.rPr).FirstOrDefault();
-                int runStart = currentPosition;
-                int runEnd = currentPosition + runText.Length;
-    
-                // Find split positions within this run
-                var splitsInRun = splitPositions
-                    .Where(pos => pos > runStart && pos < runEnd)
-                    .Select(pos => pos - runStart)
-                    .ToList();
+                // Transform this run - might return 1 or more runs
+                return TransformRun(element, splitPositions, currentPosition);
+            }
+            else
+            {
+                // For non-run elements, recursively transform children
+                var transformedNodes = new List<XNode>();
+                int childPosition = currentPosition;
 
-                if (splitsInRun.Count == 0)
+                foreach (var child in element.Nodes())
                 {
-                    // No splits needed in this run
-                    newRuns.Add(run);
-                }
-                else
-                {
-                    // Split this run
-                    int lastSplit = 0;
-                    foreach (var splitPos in splitsInRun)
+                    if (child is XElement childElement)
                     {
-                        if (splitPos > lastSplit)
-                        {
-                            var textSegment = runText[lastSplit..splitPos];
-                            newRuns.Add(new XElement(W.r,
-                                runProperties != null ? new XElement(runProperties) : null,
-                                CreateTextElement(textSegment)));
-                        }
-                        lastSplit = splitPos;
+                        var childResult = TransformNodeForSplitting(childElement, splitPositions, childPosition);
+                        transformedNodes.AddRange(childResult.Nodes);
+                        childPosition += childResult.TextLength; // Use the returned length
                     }
-                    // Add the final segment
-                    if (lastSplit < runText.Length)
+                    else
                     {
-                        var textSegment = runText[lastSplit..];
-                        newRuns.Add(new XElement(W.r,
+                        // Text nodes, etc. - pass through unchanged
+                        transformedNodes.Add(child);
+                        // Non-element nodes don't contribute to text position
+                    }
+                }
+
+                var newElement = new XElement(element.Name, element.Attributes(), transformedNodes);
+                
+                // Debug: Check for invalid nesting
+                if (element.Name == W.p)
+                {
+                    var nestedParagraphs = newElement.Elements(W.p).ToList();
+                    if (nestedParagraphs.Any())
+                    {
+                        throw new InvalidOperationException($"Created paragraph with {nestedParagraphs.Count} nested paragraph(s)!");
+                    }
+                }
+                return new TransformResult
+                {
+                    Nodes = new[] { newElement },
+                    TextLength = childPosition - currentPosition
+                };
+            }
+        }
+
+        private static TransformResult TransformRun(XElement run, List<int> splitPositions, int runStartPosition)
+        {
+            var runText = UnicodeMapper.RunToString(run); // Call once and reuse
+            if (string.IsNullOrEmpty(runText))
+            {
+                return new TransformResult { Nodes = new[] { run }, TextLength = 0 };
+            }
+
+            // Check if this run has mixed content (text + special elements)
+            if (RunIsMixed(run))
+            {
+                // Mixed content - split into separate runs first, then recursively process each
+                var mixedSplitRuns = SplitMixedContentRun(run);
+                var resultRuns = new List<XNode>();
+                int currentPos = runStartPosition;
+                foreach (var splitRun in mixedSplitRuns)
+                {
+                    if (true)
+                    {
+                        // SANITY CHECK: Verify that split runs are actually pure (for safety)
+                        if (RunIsMixed(splitRun))
+                            throw new InvalidOperationException("SplitMixedContentRun produced mixed content run - potential infinite recursion");
+                    }
+                    // Recursively apply field boundary splitting to each run
+                    var splitRunResult = TransformRun(splitRun, splitPositions, currentPos);
+                    resultRuns.AddRange(splitRunResult.Nodes);
+                    currentPos += splitRunResult.TextLength;
+                }
+
+                return new TransformResult { Nodes = resultRuns, TextLength = runText.Length };
+            }
+
+            var runEndPosition = runStartPosition + runText.Length;
+
+            // Find split positions within this run
+            var splitsInRun = splitPositions
+                .Where(pos => pos > runStartPosition && pos < runEndPosition)
+                .Select(pos => pos - runStartPosition)
+                .ToList();
+
+            if (splitsInRun.Count == 0)
+            {
+                // No splits needed in this run
+                return new TransformResult { Nodes = new[] { run }, TextLength = runText.Length };
+            }
+            else
+            {
+                // Split this text-only run at the required positions
+                var runProperties = run.Elements(W.rPr).FirstOrDefault();
+                var resultRuns = new List<XElement>();
+                int lastSplit = 0;
+
+                foreach (var splitPos in splitsInRun)
+                {
+                    if (splitPos > lastSplit)
+                    {
+                        var textSegment = runText[lastSplit..splitPos];
+                        resultRuns.Add(new XElement(W.r,
                             runProperties != null ? new XElement(runProperties) : null,
                             CreateTextElement(textSegment)));
                     }
+                    lastSplit = splitPos;
                 }
-                currentPosition = runEnd;
+
+                // Add the final segment
+                if (lastSplit < runText.Length)
+                {
+                    var textSegment = runText[lastSplit..];
+                    resultRuns.Add(new XElement(W.r,
+                        runProperties != null ? new XElement(runProperties) : null,
+                        CreateTextElement(textSegment)));
+                }
+
+                return new TransformResult { Nodes = resultRuns.Cast<XNode>(), TextLength = runText.Length };
             }
-            // Rebuild paragraph with split runs
-            return ReplaceParagraphRuns(paragraph, runs, newRuns);
+        }
+
+        private static bool RunIsMixed(XElement run)
+        {
+            // Check if this run has mixed content (text + special elements)
+            var hasTextElements = run.Elements(W.t).Any();
+            var hasSpecialElements = run.Elements().Where(e => e.Name != W.rPr && e.Name != W.t).Any();
+            return hasTextElements && hasSpecialElements;
+        }
+
+        private class TransformResult
+        {
+            public IEnumerable<XNode> Nodes { get; set; }
+            public int TextLength { get; set; }
+        }
+
+        private static List<XElement> SplitMixedContentRun(XElement run)
+        {
+            var runProperties = run.Elements(W.rPr).FirstOrDefault();
+            var splitRuns = new List<XElement>();
+
+            // Create one run per child element (excluding run properties)
+            // (for future consideration: would there be additional benefit to splitting into ONLY
+            // as many runs as warranted by the BOUNDARIES between text and non-text elements?)
+            foreach (var element in run.Elements().Where(e => e.Name != W.rPr))
+            {
+                if (element.Name == W.t)
+                {
+                    // For text elements, we might need to split further if they contain multiple characters
+                    // But for now, let's keep text elements as single runs
+                    splitRuns.Add(new XElement(W.r,
+                        runProperties != null ? new XElement(runProperties) : null,
+                        new XElement(element)));
+                }
+                else
+                {
+                    // Special elements (tabs, breaks) - one run per element
+                    splitRuns.Add(new XElement(W.r,
+                        runProperties != null ? new XElement(runProperties) : null,
+                        new XElement(element)));
+                }
+            }
+            return splitRuns;
         }
 
         private static XElement CreateTextElement(string textContent)
@@ -330,71 +436,28 @@ namespace OpenDocx
             return new XElement(W.t, xmlSpace, textContent);
         }
 
-        private static XElement ReplaceParagraphRuns(XElement paragraph, List<XElement> originalRuns, List<XElement> newRuns)
-        {
-            if (originalRuns.Count == 0 || newRuns.Count == 0)
-                return paragraph;
-
-            // Simple case: if all original runs are direct children of the paragraph
-            if (originalRuns.All(r => r.Parent == paragraph))
-            {
-                var newParagraph = new XElement(paragraph.Name, paragraph.Attributes());
-
-                bool runsReplaced = false;
-                foreach (var node in paragraph.Nodes())
-                {
-                    if (node is XElement element && element.Name == W.r && originalRuns.Contains(element))
-                    {
-                        // Replace all original runs with new runs (but only on the first match)
-                        if (!runsReplaced)
-                        {
-                            foreach (var newRun in newRuns)
-                            {
-                                newParagraph.Add(newRun);
-                            }
-                            runsReplaced = true;
-                        }
-                        // Skip this original run
-                    }
-                    else
-                    {
-                        // Keep other nodes as-is
-                        newParagraph.Add(node);
-                    }
-                }
-
-                return newParagraph;
-            }
-            else
-            {
-                // Complex case with nested runs - fall back to original paragraph
-                // This shouldn't happen often with the DescendantsTrimmed approach
-                return paragraph;
-            }
-        }
-
         private static XElement ProcessParagraphWithAlignedRuns(XElement paragraph, FieldRecognizer recognizer,
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
             var paraContents = ExtractTextContent(paragraph);
             var matches = recognizer.Regex.Matches(paraContents);
-            
+
             // FIRST: Register all fields in forward order for the accumulator
             var fieldReplacements = new List<(Match match, string fieldId, XElement contentControl)>();
-            
+
             foreach (Match match in matches.Cast<Match>().OrderBy(m => m.Index)) // Forward order
             {
                 var matchString = match.Value.Trim().Replace("\u0001", "");
                 var fieldContent = matchString
                     .Substring(recognizer.EmbedBeginLength, matchString.Length - recognizer.EmbedDelimLength)
                     .CleanUpInvalidCharacters();
-                    
+
                 if (recognizer.IsField(fieldContent, out fieldContent))
                 {
                     // Register field in forward order
                     var fieldId = fieldAccumulator.AddField(fieldContent);
                     var contentControl = CCTWrap(fieldId, new XElement(W.r, new XElement(W.t, '[' + fieldContent + ']')));
-                    
+
                     fieldReplacements.Add((match, fieldId, contentControl));
                 }
             }
@@ -403,7 +466,7 @@ namespace OpenDocx
             {
                 return paragraph;
             }
-            
+
             // check if single-field paragraphs have any non-whitespace text besides that field
             if (fieldReplacements.Count == 1)
             {
@@ -536,24 +599,6 @@ namespace OpenDocx
                 runElement.Nodes().Select(n => IdentifyAndNormalizeFields(n, recognizer, fieldAccumulator, comments)));
         }
 
-        private class TextRunInfo
-        {
-            public XElement Run { get; set; }
-            public XElement TextElement { get; set; }
-            public string Text { get; set; }
-            public int StartPosition { get; set; }
-            public int Length { get; set; }
-            public XElement RunProperties { get; set; }
-        }
-
-        private class FieldReplacement
-        {
-            public System.Text.RegularExpressions.Match Match { get; set; }
-            public XElement ContentControl { get; set; }
-            public List<XElement> AffectedRuns { get; set; }
-            public string FieldContent { get; set; }
-        }
-
         static XElement CCTWrap(string tag, params object[] content) =>
             new XElement(W.sdt,
                 new XElement(W.sdtPr,
@@ -562,16 +607,4 @@ namespace OpenDocx
                 new XElement(W.sdtContent, content)
             );
     }
-
-    // public static class StringFixerUpper
-    // {
-    //     public static string CleanUpInvalidCharacters(this string fieldText)
-    //     {
-    //         return fieldText.Trim()
-    //                         .Replace('“', '"') // replace curly quotes with straight ones
-    //                         .Replace('”', '"')
-    //                         .Replace("\u200b", null) // remove zero-width spaces -- potentially inserted via Macro or Word add-in for purposes of allowing word wrap
-    //                         .Replace("\u200c", null);
-    //     }
-    // }
 }

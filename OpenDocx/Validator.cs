@@ -44,11 +44,14 @@ namespace OpenDocx
                     var valErrors = v.Validate(wDoc).Where(ve => !s_ExpectedErrors.Contains(ve.Description));
 
                     StringBuilder sb = new StringBuilder();
+                    // TODO: improve this! valErrors has tons of useful info on each error, including
+                    // Path (the XmlPath to the node where the error happened)
+                    // Node (the node in question), including Node.OuterXml and Node.InnerText
                     foreach (var item in valErrors.Select(r => r.Description).OrderBy(t => t).Distinct())
-	                {
+                    {
                         hasErrors = true;
-		                sb.Append(item).Append(Environment.NewLine);
-	                }
+                        sb.Append(item).Append(Environment.NewLine);
+                    }
                     errorList = sb.ToString();
                 }
             }
