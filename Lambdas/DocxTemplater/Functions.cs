@@ -79,7 +79,7 @@ public class Functions
                     KeepPropertyNames = new List<string>() { "UpdateFields", "PlayMacros" },
                 };
 
-                var normalizeResult = FieldExtractor.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
+                var normalizeResult = Normalizer.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
                 normalizedBytes = normalizeResult.NormalizedTemplate;
                 // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
                 context.Logger.Log("Template normalized; building field dictionary (step 1B)...");
