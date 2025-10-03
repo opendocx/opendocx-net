@@ -141,6 +141,84 @@ public class Functions
         }
     }
 
+    /// <summary>
+    /// This method is called for every Lambda invocation.
+    /// </summary>
+    /// <param name="req">The request for the Lambda function handler to process.</param>
+    /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
+    /// <returns>The result of the assembly.</returns>
+    public async Task<AssembleResponse> AssembleDocx(AssembleRequest req, ILambdaContext context)
+    {
+        if (string.IsNullOrEmpty(req.ID) && string.IsNullOrEmpty(req.OutputName))
+        {
+            return new AssembleResponse(req, false)
+            {
+                ErrorMessage = $"Invalid AssembleRequest: either OutputName or ID (or both) must be specified"
+            };
+        }
+        try
+        {
+            // get the requested template
+            byte[] templateBytes = await GetBytes(req.Bucket, req.TemplateKey, context);
+
+            // get the requested composition sources, which should already have been completed
+            var sourceTasks = req.Sources.Select(async src =>
+            {
+                var keepSections = req.Data.Contains($"oxpt://DocumentAssembler/insert/{src}?KeepSections=true");
+                if (!keepSections)
+                {
+                    // sanity check -- make sure this approach works
+                    if (!req.Data.Contains($"oxpt://DocumentAssembler/insert/{src}"))
+                    {
+                        throw new Exception("Unable to determine whether or not to keep Sections in insert operation");
+                    }
+                }
+                var srcKey = req.DestinationKey + '/' + src;
+                var sourceBytes = await GetBytes(req.Bucket, srcKey, context);
+                return new IndirectSource(src, sourceBytes, keepSections);
+            });
+            var sources = await Task.WhenAll(sourceTasks);
+
+            // assemble the document
+            var result = await OpenDocx.Assembler.AssembleDocumentAsync(templateBytes, req.Data, sources);
+            if (result.HasErrors)
+            {
+                return new AssembleResponse(req, false)
+                {
+                    ErrorMessage = $"Assembly error: {result.Error}"
+                };
+            }
+
+            // Write result to S3
+            string? resultKey = string.IsNullOrEmpty(req.OutputName) ? null : string.Join('/', req.DestinationKey, req.OutputName);
+            string? interimResultKey = string.IsNullOrEmpty(req.ID) ? null : string.Join('/', req.DestinationKey, req.ID);
+            string outKey = string.IsNullOrEmpty(interimResultKey) ? resultKey! : interimResultKey;
+            await PutBytes(req.Bucket, outKey, result.Bytes);
+            context.Logger.LogLine($"New object {outKey} stored");
+
+            if (!string.IsNullOrEmpty(resultKey) && (outKey != resultKey))
+            {
+                // request included BOTH an ID (under which output has now already been stored)
+                // AND a final output file name... in this case copy the output to the requested location
+                await CopyObject(req.Bucket, interimResultKey!, resultKey, context);
+            }
+
+            return new AssembleResponse(req, true)
+            {
+                ResultKey = resultKey,
+                InterimResultKey = interimResultKey,
+            };
+        }
+        catch (Exception ex)
+        {
+            context.Logger.LogLine($"Exception: {ex.Message}");
+            return new AssembleResponse(req, false)
+            {
+                ErrorMessage = $"Exception: { ex.Message}"
+            };
+        }
+    }
+
     private async Task<byte[]> GetBytes(string bucket, string key, ILambdaContext context)
     {
         try
@@ -207,6 +285,28 @@ public class Functions
             Key = key,
             ContentBody = str,
         });
+    }
+
+    private async Task CopyObject(string bucket, string sourceKey, string destinationKey, ILambdaContext context)
+    {
+        try
+        {
+            var copyRequest = new CopyObjectRequest
+            {
+                SourceBucket = bucket,
+                SourceKey = sourceKey,
+                DestinationBucket = bucket,
+                DestinationKey = destinationKey
+            };
+            await S3Client.CopyObjectAsync(copyRequest);
+            context.Logger.LogLine($"Copied {sourceKey} to {destinationKey}");
+        }
+        catch (Exception e)
+        {
+            context.Logger.LogError($"Error copying object from {sourceKey} to {destinationKey} in bucket {bucket}");
+            context.Logger.LogError(e.Message);
+            throw;
+        }
     }
 
     private async Task DeleteObject(string bucket, string key, ILambdaContext context)

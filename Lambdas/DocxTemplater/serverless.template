@@ -88,6 +88,63 @@
           }
         }
       }
+    },
+    "AssembleDocx": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${LambdaPrefix}AssembleDocx"
+        },
+        "CodeUri": "",
+        "Description": "Assemble a DOCX file based on a template, XML data, and (optionally) pre-assembled DOCX components",
+        "MemorySize": 2048,
+        "Timeout": 120,
+        "Handler": "DocxTemplater::DocxTemplater.Functions::AssembleDocx",
+        "Runtime": "dotnet8",
+        "Role": null,
+        "Policies": [
+          "AWSLambda_FullAccess",
+          {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                }
+              }
+            ]
+          }
+        ],
+        "Architectures": [
+          "arm64"
+        ],
+        "EphemeralStorage": {
+          "Size": 512
+        },
+        "PackageType": "Zip",
+        "SnapStart": {
+          "ApplyOn": "None"
+        },
+        "RuntimeManagementConfig": {
+          "UpdateRuntimeOn": "Auto"
+        },
+        "Environment": {
+          "Variables": {
+          }
+        }
+      }
     }
   }
 }
