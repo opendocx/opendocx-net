@@ -7,14 +7,14 @@
       "Type": "String",
       "Description": "Name of the existing S3 bucket to trigger the Lambda functions."
     },
+    "LambdaPrefix": {
+      "Type": "String",
+      "Description": "Prefix for the lambda function name.",
+      "Default": ""
+    },
     "SqsQueueArn": {
       "Type": "String",
       "Description": "ARN of the SQS queue to which Lambdas can send messages."
-    },
-    "PrepareDocxLambdaName": {
-      "Type": "String",
-      "Description": "Name of the PrepareDocx Lambda function.",
-      "Default": "PrepareDocxTemplate"
     }
   },
   "Resources": {
@@ -22,10 +22,10 @@
       "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
-          "Ref": "PrepareDocxLambdaName"
+          "Fn::Sub": "${LambdaPrefix}PrepareDocxTemplate"
         },
         "CodeUri": "",
-        "Description": "New Step 1 - After DOCX upload, extract and normalize field structure + transform template",
+        "Description": "Step 1 - After DOCX upload, extract and normalize field structure + transform template",
         "MemorySize": 4096,
         "Timeout": 300,
         "Handler": "DocxTemplater::DocxTemplater.Functions::PrepareDocxTemplate",
