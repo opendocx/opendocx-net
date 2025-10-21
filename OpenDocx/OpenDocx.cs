@@ -66,6 +66,7 @@ namespace OpenDocx
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             Converters = { new JsonStringEnumConverter() },
             NumberHandling = JsonNumberHandling.AllowReadingFromString,
+            MaxDepth = 128, // needed for a sequence of up to 64 "elseif" branches in logic -- awful but concievable
         };
 
         public class NormalizeDocxResult

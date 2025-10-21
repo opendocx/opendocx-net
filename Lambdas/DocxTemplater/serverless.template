@@ -89,6 +89,66 @@
         }
       }
     },
+    "ImportDocxTemplate": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${LambdaPrefix}ImportDocxTemplate"
+        },
+        "CodeUri": "",
+        "Description": "Attempt to create ALL support files for an imported DOCX template",
+        "MemorySize": 4096,
+        "Timeout": 300,
+        "Handler": "DocxTemplater::DocxTemplater.Functions::ImportDocxTemplate",
+        "Runtime": "dotnet8",
+        "Role": null,
+        "Policies": [
+          "AWSLambda_FullAccess",
+          {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                }
+              }
+            ]
+          }
+        ],
+        "Architectures": [
+          "arm64"
+        ],
+        "EphemeralStorage": {
+          "Size": 512
+        },
+        "EventInvokeConfig": {
+          "MaximumEventAgeInSeconds": 21600,
+          "MaximumRetryAttempts": 2
+        },
+        "PackageType": "Zip",
+        "SnapStart": {
+          "ApplyOn": "None"
+        },
+        "RuntimeManagementConfig": {
+          "UpdateRuntimeOn": "Auto"
+        },
+        "Environment": {
+          "Variables": {}
+        }
+      }
+    },
     "AssembleDocx": {
       "Type": "AWS::Serverless::Function",
       "Properties": {

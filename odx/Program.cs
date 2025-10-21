@@ -16,7 +16,8 @@ namespace OpenDocx.CommandLine
             var sources = new List<IndirectSource>();
             bool nextIsOutput = false, nextIsSource = false, nextIsHelp = false, flagError = false;
             bool verifyMode = false, wantPreview = false, nextIsData = false, keepSections = false;
-            bool prepareMode = false, wantNormalize = false, wantFields = false, wantTransform = false;
+            bool prepareMode = false, importMode = false;
+            bool wantNormalize = false, wantFields = false, wantTransform = false;
             int i = 0, srcIdx = -1;
             while (i < args.Length) {
                 if (nextIsOutput) {
@@ -57,6 +58,10 @@ namespace OpenDocx.CommandLine
                     else if (argLower == "--prepare" || argLower == "-p")
                     {
                         prepareMode = true;
+                    }
+                    else if (argLower == "--import" || argLower == "-i")
+                    {
+                        importMode = true;
                     }
                     else if (argLower == "--normalize" || argLower == "-n")
                     {
@@ -111,7 +116,7 @@ namespace OpenDocx.CommandLine
             }
             if (string.IsNullOrWhiteSpace(outFile) && !verifyMode)
             {
-                if (prepareMode || wantNormalize || wantFields || wantTransform || wantFields)
+                if (prepareMode || importMode || wantNormalize || wantFields || wantTransform || wantFields)
                 { // infer default output directory for prepare template mode
                     if (inFile.EndsWith(Path.DirectorySeparatorChar + "template.docx"))
                     {
@@ -180,26 +185,26 @@ namespace OpenDocx.CommandLine
                     Console.Error.WriteLine(result.Error);
                 }
             }
-            else if (!string.IsNullOrEmpty(inFile)) // PREPARE TEMPLATE mode
+            else if (!string.IsNullOrEmpty(inFile)) // PREPARE TEMPLATE or IMPORT TEMPLATE mode
             {
-                if (prepareMode || wantNormalize || wantFields || wantTransform || wantPreview)
+                if (prepareMode || importMode || wantNormalize || wantFields || wantTransform || wantPreview)
                 {
                     byte[] docxBytes;
                     byte[] normalizedBytes;
                     string rawFields;
                     string normalizedPath = Path.Combine(outFile, "normalized.obj.docx");
                     string rawFieldPath = Path.Combine(outFile, "fields.obj.json");
-                    if (prepareMode || wantNormalize || !File.Exists(normalizedPath))
+                    if (prepareMode || wantNormalize || !File.Exists(normalizedPath) || ((wantFields || importMode) && !File.Exists(rawFieldPath)))
                     {
                         // read template into memory
                         docxBytes = await File.ReadAllBytesAsync(inFile);
-                        Console.WriteLine("Template retrieved successfully; normalizing (step 1A) using NEW algorithm...");
+                        Console.WriteLine("Template retrieved successfully; normalizing...");
                         var start = DateTime.Now;
                         var normalizeResult = Normalizer.NormalizeTemplate(docxBytes, true, new List<string>() { "UpdateFields", "PlayMacros" });
                         Console.WriteLine($"  Normalization took {(DateTime.Now - start).TotalSeconds:F1} seconds");
                         normalizedBytes = normalizeResult.NormalizedTemplate;
                         rawFields = normalizeResult.ExtractedFields;
-                        if (!prepareMode)
+                        if (!prepareMode && !importMode)
                         {
                             Directory.CreateDirectory(outFile);
                             await File.WriteAllBytesAsync(normalizedPath, normalizedBytes);
@@ -215,9 +220,27 @@ namespace OpenDocx.CommandLine
                     }
                     Dictionary<string, ParsedField> fieldDict = null;
                     string fieldDictPath = Path.Combine(outFile, "fields.dict.json");
-                    if (prepareMode || wantFields || (wantTransform && !File.Exists(fieldDictPath)))
+                    if (importMode)
                     {
-                        Console.WriteLine("building field dictionary (step 1B)...");
+                        string logicTreePath = Path.Combine(outFile, "logic.json");
+                        string logicModulePath = Path.Combine(outFile, "logic.js");
+                        Console.WriteLine("Building field dictionary, logic tree and logic module...");
+                        var parseResult = Templater.ParseFields(rawFields, true);
+                        fieldDict = parseResult.ParsedFields;
+                        Console.WriteLine("Storing field dictionary...");
+                        Directory.CreateDirectory(outFile);
+                        await File.WriteAllTextAsync(fieldDictPath,
+                            JsonSerializer.Serialize(fieldDict, OpenDocx.DefaultJsonOptions));
+                        Console.WriteLine("Storing logic.json...");
+                        await File.WriteAllTextAsync(logicTreePath,
+                            JsonSerializer.Serialize(parseResult.LogicTree, OpenDocx.DefaultJsonOptions));
+                        Console.WriteLine("Storing logic.js...");
+                        await File.WriteAllTextAsync(logicModulePath, parseResult.LegacyLogicModule);
+                        Console.WriteLine("Field dictionary, logic tree, and logic module stored");
+                    }
+                    else if (prepareMode || wantFields || (wantTransform && !File.Exists(fieldDictPath)))
+                    {
+                        Console.WriteLine("Building field dictionary...");
                         fieldDict = Templater.ParseFieldsToDict(rawFields);
                         Console.WriteLine("Storing field dictionary...");
                         Directory.CreateDirectory(outFile);
@@ -231,7 +254,8 @@ namespace OpenDocx.CommandLine
                         fieldDict = JsonSerializer.Deserialize<Dictionary<string, ParsedField>>(fieldDictStr, OpenDocx.DefaultJsonOptions);
                         Console.Write("Field dictionary retrieved successfully; ");
                     }
-                    if ((prepareMode || wantTransform) && fieldDict != null) {
+                    if ((prepareMode || importMode || wantTransform) && fieldDict != null)
+                    {
                         Console.WriteLine("Transforming docx to oxpt (step 1C)...");
                         var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
                         if (compileResult.HasErrors)
@@ -245,7 +269,7 @@ namespace OpenDocx.CommandLine
                         Console.WriteLine("oxpt.docx stored");
                         Console.WriteLine("Success: OK2");
                     }
-                    if (prepareMode || wantPreview)
+                    if (prepareMode || importMode || wantPreview)
                     {
                         Console.WriteLine("Now replacing docx fields prior to markdown conversion (step 1D)...");
                         try
@@ -339,6 +363,13 @@ PREPARE TEMPLATE
 
     Sample:
         odx.exe template.docx --prepare
+
+IMPORT TEMPLATE
+    Similar to PREPARE TEMPLATE (above), but in step B it also creates the logic.json and logic.js
+    files which may be necessary for assembly under certain circumstances.
+
+    Sample:
+        odx.exe template.docx --import
 
 ASSEMBLE DOCUMENT
     input: an oxpt.docx format template + matching XML data + options (including output path)

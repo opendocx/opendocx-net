@@ -54,19 +54,23 @@ public class Functions
         var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
         foreach (var record in eventRecords)
         {
-            var s3Event = record.S3;
-            if (s3Event == null)
+            var s3Entity = record.S3;
+            if (s3Entity == null)
             {
                 continue;
             }
-
-            string bucket = s3Event.Bucket.Name;
-            string key = s3Event.Object.Key; // last portion should be "/template.docx", since that's what triggers this lambda
+            string key = s3Entity.Object.Key; // last portion should be "/template.docx", since that's what triggers this lambda
+            if (record.EventName.StartsWith("s3:ObjectCreated:Copy")) // Skip processing for copy operations
+            {
+                context.Logger.LogLine($"Skipping PrepareDocxTemplate triggered by copy operation for {key}");
+                continue;
+            }
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
             string workspace = GetWorkspace(baseKey);
-            string jobId = LastFolder(baseKey);
+            string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
             context.Logger.Log($"Template job {jobId} uploaded; starting...");
             context.Logger.Log("Retrieving template from S3...");
+            string bucket = s3Entity.Bucket.Name;
             byte[] docxBytes = await GetBytes(bucket, key, context);
             context.Logger.Log("Template retrieved successfully; normalizing (step 1A)...");
             byte[] normalizedBytes;
@@ -110,6 +114,108 @@ public class Functions
                     context.Logger.LogDebug(e.StackTrace);
                 // send SQS message with error info:
                 await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
+                return;
+            }
+            // the following is OUTSIDE the above try/catch block, because we intentionally
+            // do NOT want to report SQS whether it succeeds or fails.
+            context.Logger.Log("Now replacing docx fields prior to markdown conversion (step 1D)...");
+            try
+            {
+                var previewResult = TemplateTransformer.TransformTemplate(
+                    normalizedBytes,
+                    TemplateFormat.PreviewDocx,
+                    null); // field map is ignored when output = TemplateFormat.PreviewDocx
+                if (!previewResult.HasErrors)
+                {
+                    context.Logger.LogInformation("Preview generated; storing preview.obj.docx to S3...");
+                    await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
+                    // we do NOT report success via SQS, because the previews are not required for basic functionality
+                }
+                else
+                {
+                    context.Logger.LogInformation("Preview failed to generate:\n" + string.Join('\n', previewResult.Errors));
+                    // we do NOT report errors via SQS, because the previews are not required for basic functionality
+                }
+            }
+            catch (Exception e)
+            {
+                // some other random exception, typically an internal error
+                context.Logger.LogInformation("Preview error: " + e.Message);
+            }
+        }
+    }
+
+    public async Task ImportDocxTemplate(S3Event evnt, ILambdaContext context)
+    {
+        var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
+        foreach (var record in eventRecords)
+        {
+            var s3Entity = record.S3;
+            if (s3Entity == null)
+            {
+                continue;
+            }
+            string key = s3Entity.Object.Key; // last portion should be "/imported.docx", since that's what triggers this lambda
+            if (record.EventName.StartsWith("s3:ObjectCreated:Copy")) // Skip processing for copy operations
+            {
+                context.Logger.LogLine($"Skipping ImportDocxTemplate triggered by copy operation for {key}");
+                continue;
+            }
+            string baseKey = key[..(key.LastIndexOf('/') + 1)];
+            string workspace = GetWorkspace(baseKey);
+            string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
+            context.Logger.Log($"Template Import job {jobId} uploaded; starting...");
+            context.Logger.Log("Retrieving template from S3...");
+            string bucket = s3Entity.Bucket.Name;
+            byte[] docxBytes = await GetBytes(bucket, key, context);
+            context.Logger.Log("Template retrieved successfully; normalizing (step 1A)...");
+            byte[] normalizedBytes;
+            try
+            {
+                var options = new PrepareTemplateOptions()
+                {
+                    GenerateFlatPreview = true,
+                    RemoveCustomProperties = true,
+                    KeepPropertyNames = new List<string>() { "UpdateFields", "PlayMacros" },
+                };
+
+                var normalizeResult = Normalizer.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
+                normalizedBytes = normalizeResult.NormalizedTemplate;
+                // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
+                context.Logger.Log("Template normalized; parsing fields and building logic tree...");
+                var parseResult = Templater.ParseFields(normalizeResult.ExtractedFields, true);
+                var fieldDict = parseResult.ParsedFields;
+                context.Logger.Log("Parsing completed; storing field dictionary in S3...");
+                await PutString(bucket, baseKey + "fields.dict.json",
+                    JsonSerializer.Serialize(fieldDict, OpenDocx.OpenDocx.DefaultJsonOptions));
+                // await SQSSender.SendMessageAsync(context.Logger, "OK1", workspace, jobId);
+                context.Logger.Log("Field dictionary stored (so other processes can use it); storing logic.json...");
+                await PutString(bucket, baseKey + "logic.json",
+                    JsonSerializer.Serialize(parseResult.LogicTree, OpenDocx.OpenDocx.DefaultJsonOptions));
+
+                context.Logger.Log("Logic tree stored; storing logic.js...");
+                await PutString(bucket, baseKey + "logic.js", parseResult.LegacyLogicModule);
+                context.Logger.Log("Logic module stored.");
+                context.Logger.Log("Transforming docx to oxpt (step 1C)...");
+                var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
+                if (compileResult.HasErrors)
+                {
+                    throw new Exception("Error while transforming DOCX:\n"
+                        + string.Join('\n', compileResult.Errors));
+                }
+                context.Logger.Log("DOCX transformed; storing oxpt.docx in S3...");
+                await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
+                context.Logger.Log("oxpt.docx stored");
+                // await SQSSender.SendMessageAsync(context.Logger, "OK2", workspace, jobId);
+                // context.Logger.Log("Success");
+            }
+            catch (Exception e)
+            {
+                context.Logger.LogError(e.Message);
+                if (e.StackTrace != null)
+                    context.Logger.LogDebug(e.StackTrace);
+                // send SQS message with error info:
+                // await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
                 return;
             }
             // the following is OUTSIDE the above try/catch block, because we intentionally
@@ -214,7 +320,7 @@ public class Functions
             context.Logger.LogLine($"Exception: {ex.Message}");
             return new AssembleResponse(req, false)
             {
-                ErrorMessage = $"Exception: { ex.Message}"
+                ErrorMessage = $"Exception: {ex.Message}"
             };
         }
     }
