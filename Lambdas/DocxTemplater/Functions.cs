@@ -65,6 +65,11 @@ public class Functions
                 context.Logger.LogLine($"Skipping PrepareDocxTemplate triggered by copy operation for {key}");
                 continue;
             }
+            if (!key.Contains("/templates/"))
+            {
+                context.Logger.LogLine($"Skipping PrepareDocxTemplate triggered on file NOT inside 'templates/': '{key}'");
+                continue;
+            }
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
             string workspace = GetWorkspace(baseKey);
             string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
@@ -161,6 +166,11 @@ public class Functions
                 context.Logger.LogLine($"Skipping ImportDocxTemplate triggered by copy operation for {key}");
                 continue;
             }
+            if (!key.Contains("/templates/"))
+            {
+                context.Logger.LogLine($"Skipping ImportDocxTemplate triggered on file NOT inside '/templates/': '{key}'");
+                continue;
+            }
             string baseKey = key[..(key.LastIndexOf('/') + 1)];
             string workspace = GetWorkspace(baseKey);
             string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
@@ -168,7 +178,9 @@ public class Functions
             context.Logger.Log("Retrieving template from S3...");
             string bucket = s3Entity.Bucket.Name;
             byte[] docxBytes = await GetBytes(bucket, key, context);
-            context.Logger.Log("Template retrieved successfully; normalizing (step 1A)...");
+            context.Logger.Log("Template retrieved successfully; beginning rename and normalizing (step 1A)...");
+            // RenameObject uses COPY, so it should NOT trigger a redundant invocation of PrepareDocxTemplate
+            var renameTask = RenameObject(bucket, key, baseKey + "template.docx", context);
             byte[] normalizedBytes;
             try
             {
@@ -244,6 +256,7 @@ public class Functions
                 // some other random exception, typically an internal error
                 context.Logger.LogInformation("Preview error: " + e.Message);
             }
+            await renameTask; // make sure rename has finished before we move on to the next event
         }
     }
 
@@ -423,6 +436,26 @@ public class Functions
             BucketName = bucket,
             Key = key
         });
+    }
+
+    private async Task RenameObject(string bucket, string sourceKey, string destinationKey, ILambdaContext context)
+    {
+        try
+        {
+            // Copy the object to the new location
+            await CopyObject(bucket, sourceKey, destinationKey, context);
+            
+            // Delete the original object
+            await DeleteObject(bucket, sourceKey, context);
+            
+            context.Logger.LogLine($"Renamed {sourceKey} to {destinationKey}");
+        }
+        catch (Exception e)
+        {
+            context.Logger.LogError($"Error renaming object from {sourceKey} to {destinationKey} in bucket {bucket}");
+            context.Logger.LogError(e.Message);
+            throw;
+        }
     }
 
     private static string LastFolder(string key)
