@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace OpenDocx
 {
@@ -136,12 +137,12 @@ namespace OpenDocx
             switch (Type)
             {
                 case FieldType.Content:
-                    sb.Append($"h.define('{Atom}','{Expression}');\n");
+                    sb.Append($"h.define('{Atom}','{EscapeExpressionStr(Expression)}');\n");
                     break;
                 case FieldType.If:
                 case FieldType.ElseIf:
                     if (Type == FieldType.ElseIf) sb.Append("} else {\n");
-                    sb.Append($"if(h.beginCondition('{Atom}b','{Expression}'))\n");
+                    sb.Append($"if(h.beginCondition('{Atom}b','{EscapeExpressionStr(Expression)}'))\n");
                     sb.Append("{\n");
                     Content.ForEach(node => node.SerializeToLegacyModule(sb));
                     sb.Append("}\n");
@@ -151,7 +152,7 @@ namespace OpenDocx
                     Content.ForEach(node => node.SerializeToLegacyModule(sb));
                     break;
                 case FieldType.List:
-                    sb.Append($"for (const {Atom}i of h.beginList('{Atom}', '{Expression}'))\n");
+                    sb.Append($"for (const {Atom}i of h.beginList('{Atom}', '{EscapeExpressionStr(Expression)}'))\n");
                     sb.Append("{\n");
                     sb.Append($"h.beginObject('{Atom}i',{Atom}i);\n");
                     Content.ForEach(node => node.SerializeToLegacyModule(sb));
@@ -162,6 +163,26 @@ namespace OpenDocx
                 default:
                     throw new NotImplementedException();
             }
+        }
+
+        // Regex pattern equivalent to /(?<=\\\\)'|(?<!\\)'/g
+        // Matches single quotes that are either:
+        // 1. Preceded by double backslashes (\\), OR
+        // 2. NOT preceded by a single backslash
+        private static readonly Regex SingleQuotes = new Regex(@"(?<=\\\\)'|(?<!\\)'", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Escapes single quotes in expression strings to prevent syntax errors 
+        /// when the expressions are embedded in JavaScript code.
+        /// </summary>
+        /// <param name="strExpr">The expression string to escape</param>
+        /// <returns>The expression string with unescaped single quotes escaped</returns>
+        private static string EscapeExpressionStr(string strExpr)
+        {
+            if (string.IsNullOrEmpty(strExpr))
+                return strExpr;
+                
+            return SingleQuotes.Replace(strExpr, "\\'");
         }
     }
 
