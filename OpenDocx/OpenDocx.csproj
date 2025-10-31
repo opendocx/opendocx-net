@@ -5,7 +5,33 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RootNamespace>OpenDocx</RootNamespace>
     <AssemblyName>OpenDocx</AssemblyName>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>OpenDocx.NET</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>OpenDocx</Authors>
+    <Company>OpenDocx</Company>
+    <Product>OpenDocx.NET</Product>
+    <Description>A .NET library for document processing and templating with OpenXML. This package provides tools for assembling, templating, and transforming Word documents programmatically.</Description>
+    <PackageTags>openxml;word;document;templating;docx;template;assembly</PackageTags>
+    <PackageProjectUrl>https://github.com/opendocx/opendocx-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/opendocx/opendocx-net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReleaseNotes>Initial release of OpenDocx.NET library for document processing and templating.</PackageReleaseNotes>
+    <Copyright>Copyright (c) 2025 OpenDocx</Copyright>
+    
+    <!-- Enable package generation -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" Version="2.19.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
