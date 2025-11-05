@@ -374,7 +374,7 @@ namespace OpenDocx
 
         private static TransformResult TransformRun(XElement run, List<int> splitPositions, int runStartPosition)
         {
-            var runText = UnicodeMapper.RunToString(run); // Call once and reuse
+            var runText = RunToString(run); // Call once and reuse
             if (string.IsNullOrEmpty(runText))
             {
                 return new TransformResult { Nodes = new[] { run }, TextLength = 0 };
@@ -572,7 +572,7 @@ namespace OpenDocx
     
             foreach (var run in runs)
             {
-                var runText = UnicodeMapper.RunToString(run);
+                var runText = RunToString(run);
                 int runStart = currentPosition;
                 int runEnd = currentPosition + runText.Length;
         
@@ -647,14 +647,14 @@ namespace OpenDocx
         {
             if (element.Name == W.r)
             {
-                return UnicodeMapper.RunToString(element);
+                return RunToString(element);
             }
 
             // Use the same pattern as OpenXmlRegex for consistent text extraction
             return element
                 .DescendantsTrimmed(W.txbxContent)
                 .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
-                .Select(UnicodeMapper.RunToString)
+                .Select(RunToString)
                 .StringConcatenate();
         }
 
@@ -671,6 +671,29 @@ namespace OpenDocx
             return new XElement(runElement.Name,
                 runElement.Attributes(),
                 runElement.Nodes().Select(n => IdentifyAndNormalizeFields(n, recognizer, fieldAccumulator, comments)));
+        }
+
+        private static string RunToString(XElement r)
+        {
+            if (RunIsVisible(r))
+                return UnicodeMapper.RunToString(r);
+            return string.Empty;
+        }
+
+        private static readonly HashSet<XName> Invisibles = new() {
+            W.rPr,
+            W.fldChar,
+            W.instrText,
+            W.lastRenderedPageBreak,
+        };
+
+        static Boolean RunIsVisible(XElement r)
+        {
+            // If it has any <w:t>, it's visible (fast, common case)
+            if (r.Elements(W.t).Any())
+                return true;
+            // Otherwise: it's visible unless it contains ONLY invisibles
+            return !r.Elements().All(e => Invisibles.Contains(e.Name));
         }
 
         static XElement CCTWrap(string tag, params object[] content) =>
