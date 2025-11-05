@@ -26,7 +26,7 @@ if [ -z "$1" ]; then
 fi
 
 API_KEY=$1
-PACKAGE_PATH="./bin/Release/OpenDocx.1.0.0.nupkg"
+PACKAGE_PATH="./bin/Release/OpenDocx.NET.1.0.1.nupkg"
 
 # Check if package exists
 if [ ! -f "$PACKAGE_PATH" ]; then

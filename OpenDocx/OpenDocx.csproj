@@ -8,7 +8,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>OpenDocx.NET</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>OpenDocx</Authors>
     <Company>OpenDocx</Company>
     <Product>OpenDocx.NET</Product>
@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Initial release of OpenDocx.NET library for document processing and templating.</PackageReleaseNotes>
+    <PackageReleaseNotes>Version 1.0.1 - fix handling of Word field codes, package metadata updates, documentation improvements.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2025 OpenDocx</Copyright>
     
     <!-- Enable package generation -->
