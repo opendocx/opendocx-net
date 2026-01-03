@@ -8,10 +8,10 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>OpenDocx.NET</PackageId>
-    <Version>1.0.2</Version>
-    <AssemblyVersion>1.0.2.0</AssemblyVersion>
-    <FileVersion>1.0.2.0</FileVersion>
-    <AssemblyInformationalVersion>1.0.2</AssemblyInformationalVersion>
+    <Version>1.0.3</Version>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
+    <AssemblyInformationalVersion>1.0.3</AssemblyInformationalVersion>
     <Authors>OpenDocx</Authors>
     <Company>OpenDocx</Company>
     <Product>OpenDocx.NET</Product>
@@ -22,7 +22,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Version 1.0.2 - Fixed assembly versioning to ensure proper DLL versions in NuGet packages.</PackageReleaseNotes>
+    <PackageReleaseNotes>Version 1.0.3 - Updated OpenXmlPowerTools-Net6 dependency to 4.6.25.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2025 OpenDocx</Copyright>
     
     <!-- Enable package generation -->
@@ -42,7 +42,7 @@
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <!--<PackageReference Include="Microsoft.DotNet.InternalAbstractions" Version="1.0.0" />-->
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="7.0.0" />
-    <PackageReference Include="OpenXmlPowerTools-Net6" Version="4.6.24" />
+    <PackageReference Include="OpenXmlPowerTools-Net6" Version="4.6.25" />
     <PackageReference Include="System.IO.Packaging" Version="6.0.1" />
   </ItemGroup>
   <!--<ItemGroup>
