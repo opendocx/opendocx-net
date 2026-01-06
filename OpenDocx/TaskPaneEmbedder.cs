@@ -45,8 +45,7 @@ public class TaskPaneEmbedder
 
                 // find web extension child part by guid, or create if it doesn't exist yet
                 var webExtensionPart = taskPanesPart.GetPartsOfType<WebExtensionPart>()
-                    .Where(p => p.WebExtension.Id == guid)
-                    .FirstOrDefault();
+                    .FirstOrDefault(p => p.WebExtension.Id == guid);
                 if (webExtensionPart != null)
                 {
                     // update logic?
@@ -104,8 +103,7 @@ public class TaskPaneEmbedder
                 // searching for webExtensionTaskpane within existing children of taskpanes
                 var webExtensionPartReference = taskpanes
                     .Descendants<Wetp.WebExtensionPartReference>()
-                    .Where(r => r.Id == relationshipId)
-                    .FirstOrDefault();
+                    .FirstOrDefault(r => r.Id == relationshipId);
                 if (webExtensionPartReference != null)
                 {
                     // update the webExtensionPartReference
@@ -140,6 +138,91 @@ public class TaskPaneEmbedder
         }
     }
 
+    public static byte[] EmbedTaskPanes(byte[] docxBytes, IEnumerable<TaskPaneMetadata> taskPanes)
+    {
+        if (taskPanes == null) throw new ArgumentNullException(nameof(taskPanes));
+
+        var taskPaneList = taskPanes.ToList();
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            memoryStream.Write(docxBytes, 0, docxBytes.Length);
+
+            using (var document = WordprocessingDocument.Open(memoryStream, true))
+            {
+                if (taskPaneList.Count == 0)
+                {
+                    var existingTaskPanesPart = document.WebExTaskpanesPart;
+                    if (existingTaskPanesPart != null)
+                    {
+                        document.DeletePart(existingTaskPanesPart);
+                    }
+                    return memoryStream.ToArray();
+                }
+
+                var taskPanesPart = document.WebExTaskpanesPart ?? document.AddWebExTaskpanesPart();
+
+                foreach (var part in taskPanesPart.GetPartsOfType<WebExtensionPart>().ToList())
+                {
+                    taskPanesPart.DeletePart(part);
+                }
+
+                taskPanesPart.Taskpanes = new Wetp.Taskpanes();
+                taskPanesPart.Taskpanes.AddNamespaceDeclaration("wetp", "http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11");
+
+                foreach (var taskPane in taskPaneList)
+                {
+                    var webExtensionPart = taskPanesPart.AddNewPart<WebExtensionPart>();
+
+                    var webExtension = new We.WebExtension() { Id = taskPane.Guid };
+                    webExtension.AddNamespaceDeclaration("we", "http://schemas.microsoft.com/office/webextensions/webextension/2010/11");
+
+                    webExtension.Append(new We.WebExtensionStoreReference()
+                    {
+                        Id = taskPane.AddInId,
+                        Version = taskPane.Version,
+                        Store = taskPane.Store,
+                        StoreType = taskPane.StoreType
+                    });
+
+                    webExtension.Append(new We.WebExtensionReferenceList());
+
+                    var webExtensionPropertyBag = new We.WebExtensionPropertyBag();
+                    var webExtensionProperty = new We.WebExtensionProperty()
+                    {
+                        Name = "Office.AutoShowTaskpaneWithDocument",
+                        Value = XmlConvert.ToString(taskPane.AutoShow)
+                    };
+                    webExtensionPropertyBag.Append(webExtensionProperty);
+                    webExtension.Append(webExtensionPropertyBag);
+
+                    webExtension.Append(new We.WebExtensionBindingList());
+
+                    var snapshot = new We.Snapshot();
+                    snapshot.AddNamespaceDeclaration("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+                    webExtension.Append(snapshot);
+
+                    webExtensionPart.WebExtension = webExtension;
+
+                    var relationshipId = taskPanesPart.GetIdOfPart(webExtensionPart);
+
+                    var webExtensionTaskpane = new Wetp.WebExtensionTaskpane()
+                    {
+                        DockState = taskPane.DockState,
+                        Visibility = taskPane.Visibility,
+                        Width = taskPane.Width,
+                        Row = taskPane.Row
+                    };
+                    var webExtensionPartReference = new Wetp.WebExtensionPartReference() { Id = relationshipId };
+                    webExtensionPartReference.AddNamespaceDeclaration("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+
+                    webExtensionTaskpane.Append(webExtensionPartReference);
+                    taskPanesPart.Taskpanes.Append(webExtensionTaskpane);
+                }
+            }
+            return memoryStream.ToArray();
+        }
+    }
+
     public static byte[] RemoveTaskPane(byte[] docxBytes, string guid)
     {
         using (MemoryStream memoryStream = new MemoryStream())
@@ -151,16 +234,14 @@ public class TaskPaneEmbedder
                 if (taskPanesPart != null)
                 {
                     var webExtensionPart = taskPanesPart.GetPartsOfType<WebExtensionPart>()
-                            .Where(p => p.WebExtension.Id == guid)
-                            .FirstOrDefault();
+                            .FirstOrDefault(p => p.WebExtension.Id == guid);
                     if (webExtensionPart != null)
                     {
                         var relationshipId = taskPanesPart.GetIdOfPart(webExtensionPart);
                         // find existing task pane ref -- searching for webExtensionTaskpane within existing children of taskpanes
                         var webExtensionPartReference = taskPanesPart.Taskpanes
                             .Descendants<Wetp.WebExtensionPartReference>()
-                            .Where(r => r.Id == relationshipId)
-                            .FirstOrDefault();
+                            .FirstOrDefault(r => r.Id == relationshipId);
                         if (webExtensionPartReference != null)
                         {
                             var parent = webExtensionPartReference.Parent;
@@ -204,8 +285,7 @@ public class TaskPaneEmbedder
                         var webExtensionPropertyBag = webExtension.WebExtensionPropertyBag;
                         var autoShowProperty = webExtensionPropertyBag
                             .Descendants<We.WebExtensionProperty>()
-                            .Where(p => p.Name == "Office.AutoShowTaskpaneWithDocument")
-                            .FirstOrDefault();
+                            .FirstOrDefault(p => p.Name == "Office.AutoShowTaskpaneWithDocument");
                         if (autoShowProperty != null) {
                             resultItem.AutoShow = XmlConvert.ToBoolean(autoShowProperty.Value);
                         }
@@ -215,8 +295,7 @@ public class TaskPaneEmbedder
                         // searching for webExtensionTaskpane within existing children of taskpanes
                         var webExtensionPartReference = taskPanesPart.Taskpanes
                             .Descendants<Wetp.WebExtensionPartReference>()
-                            .Where(r => r.Id == relationshipId)
-                            .FirstOrDefault();
+                            .FirstOrDefault(r => r.Id == relationshipId);
                         if (webExtensionPartReference != null)
                         {
                             var webExtensionTaskpane = (WebExtensionTaskpane) webExtensionPartReference.Parent;
