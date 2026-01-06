@@ -415,7 +415,7 @@ namespace OpenDocxTemplater.Tests
         public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName)
         {
             var mainData = GetTestXmlData(data);
-            List<Source> sources = new List<Source>()
+            List<DocxSource> sources = new List<DocxSource>()
             {
                 new TemplateSource(GetTestTemplate(insert), mainData, "inserted"),
             };

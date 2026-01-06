@@ -35,7 +35,7 @@ public static class Assembler
         return new AssembleResult(wmlAssembledDoc.DocumentByteArray, errorMessage);
     }
 
-    public static async Task<AssembleResult> AssembleDocAsync(string templateFile, XElement data, string outputFile, List<Source> sources)
+    public static async Task<AssembleResult> AssembleDocAsync(string templateFile, XElement data, string outputFile, List<DocxSource> sources)
     {
         var result = await AssembleDocAsync(File.ReadAllBytes(templateFile), data, sources);
         if (!string.IsNullOrEmpty(outputFile))
@@ -46,7 +46,7 @@ public static class Assembler
         return result;
     }
 
-    public static async Task<AssembleResult> AssembleDocAsync(byte[] templateBytes, XElement data, List<Source> sources)
+    public static async Task<AssembleResult> AssembleDocAsync(byte[] templateBytes, XElement data, List<DocxSource> sources)
     {
         WmlDocument templateDoc = new(new OpenXmlPowerToolsDocument(templateBytes));
         WmlDocument wmlAssembledDoc = await DocumentComposer.ComposeDocument(templateDoc, data, sources);
@@ -55,12 +55,12 @@ public static class Assembler
 
     public static async Task<AssembleResult> AssembleDocumentAsync(byte[] templateBytes, string xmlData, IEnumerable<IndirectSource> sources)
     {
-        List<Source> oxptSources = null;
+        List<DocxSource> oxptSources = null;
         if (sources != null)
         {
             oxptSources = sources.Select(source => {
                 var doc = new WmlDocument(new OpenXmlPowerToolsDocument(source.Bytes));
-                var oxptSource = new Source(doc, source.ID);
+                var oxptSource = new DocxSource(doc, source.ID);
                 if (source.KeepSections) {
                     oxptSource.KeepSections = true;
                 }

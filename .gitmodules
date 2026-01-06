@@ -1,0 +1,3 @@
+[submodule "OpenXmlPowerTools"]
+	path = OpenXmlPowerTools
+	url = https://github.com/opendocx/OpenXmlPowerTools.git

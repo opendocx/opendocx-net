@@ -22,9 +22,10 @@ namespace OpenDocx
 {
     public class Composer
     {
-        public static AssembleResult ComposeDocument(List<Source> oxptSources)
+        public static AssembleResult ComposeDocument(List<DocxSource> oxptSources)
         {
-            var composedDoc = DocumentBuilder.BuildDocument(oxptSources);
+            var composedDoc = OpenXmlPowerTools.DocumentBuilder.DocumentBuilder.BuildDocument(
+                oxptSources.Cast<OpenXmlPowerTools.DocumentBuilder.Source>().ToList());
             return new AssembleResult(composedDoc.DocumentByteArray);
         }
 
@@ -39,8 +40,8 @@ namespace OpenDocx
             var oxptSources = sources.Select(source => {
                 var doc = new WmlDocument(new OpenXmlPowerToolsDocument(source.Bytes));
                 var oxptSource = string.IsNullOrWhiteSpace(source.ID)
-                    ? new Source(doc, true)
-                    : new Source(doc, source.ID);
+                    ? new DocxSource(doc, true)
+                    : new DocxSource(doc, source.ID);
                 if (source.KeepSections) {
                     oxptSource.KeepSections = true;
                 }
