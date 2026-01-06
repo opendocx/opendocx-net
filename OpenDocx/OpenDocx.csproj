@@ -38,13 +38,26 @@
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <!--<PackageReference Include="Microsoft.CodeAnalysis" Version="2.10.0" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="7.0.0" />-->
     <PackageReference Include="System.IO.Packaging" Version="9.0.1" />
+    
+    <!-- OpenXmlPowerTools dependencies - declare explicitly since we bundle OpenXmlPowerTools directly -->
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\OpenXmlPowerTools\OpenXmlPowerTools\OpenXmlPowerTools.csproj" PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- Include only the OpenXmlPowerTools DLL itself in the NuGet package -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeOpenXmlPowerToolsDll</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+
+  <Target Name="IncludeOpenXmlPowerToolsDll" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <!-- Bundle only the OpenXmlPowerTools.dll (custom submodule build) -->
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths-&gt;WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>
