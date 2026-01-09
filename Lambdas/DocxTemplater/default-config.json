@@ -12,5 +12,5 @@
   "s3-prefix": "NewTemplate/",
   "s3-bucket": "docx-lambda-deployments",
   "template": "serverless.template",
-  "template-parameters": "BucketName=;LambdaPrefix=;SqsQueueArn="
+  "template-parameters": "BucketName=;LambdaPrefix="
 }

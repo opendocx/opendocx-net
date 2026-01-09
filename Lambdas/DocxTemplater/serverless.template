@@ -11,84 +11,9 @@
       "Type": "String",
       "Description": "Prefix for the lambda function name.",
       "Default": ""
-    },
-    "SqsQueueArn": {
-      "Type": "String",
-      "Description": "ARN of the SQS queue to which Lambdas can send messages."
     }
   },
   "Resources": {
-    "PrepareDocxTemplate": {
-      "Type": "AWS::Serverless::Function",
-      "Properties": {
-        "FunctionName": {
-          "Fn::Sub": "${LambdaPrefix}PrepareDocxTemplate"
-        },
-        "CodeUri": "",
-        "Description": "Step 1 - After DOCX upload, extract and normalize field structure + transform template",
-        "MemorySize": 4096,
-        "Timeout": 300,
-        "Handler": "DocxTemplater::DocxTemplater.Functions::PrepareDocxTemplate",
-        "Runtime": "dotnet8",
-        "Role": null,
-        "Policies": [
-          "AWSLambda_FullAccess",
-          {
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "logs:*"
-                ],
-                "Resource": "arn:aws:logs:*:*:*"
-              },
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "s3:GetObject",
-                  "s3:PutObject",
-                  "s3:DeleteObject"
-                ],
-                "Resource": {
-                  "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
-                }
-              },
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "sqs:SendMessage"
-                ],
-                "Resource": {
-                  "Ref": "SqsQueueArn"
-                }
-              }
-            ]
-          }
-        ],
-        "Architectures": [
-          "arm64"
-        ],
-        "EphemeralStorage": {
-          "Size": 512
-        },
-        "EventInvokeConfig": {
-          "MaximumEventAgeInSeconds": 21600,
-          "MaximumRetryAttempts": 2
-        },
-        "PackageType": "Zip",
-        "SnapStart": {
-          "ApplyOn": "None"
-        },
-        "RuntimeManagementConfig": {
-          "UpdateRuntimeOn": "Auto"
-        },
-        "Environment": {
-          "Variables": {
-            "SQS_QUEUE_ARN": { "Ref": "SqsQueueArn" }
-          }
-        }
-      }
-    },
     "ImportDocxTemplate": {
       "Type": "AWS::Serverless::Function",
       "Properties": {
@@ -96,7 +21,7 @@
           "Fn::Sub": "${LambdaPrefix}ImportDocxTemplate"
         },
         "CodeUri": "",
-        "Description": "Attempt to create ALL support files for an imported DOCX template",
+        "Description": "Create support files for an imported DOCX template",
         "MemorySize": 4096,
         "Timeout": 300,
         "Handler": "DocxTemplater::DocxTemplater.Functions::ImportDocxTemplate",

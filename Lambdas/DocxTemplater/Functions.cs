@@ -17,7 +17,6 @@ namespace DocxTemplater;
 public class Functions
 {
     IAmazonS3 S3Client { get; set; }
-    SqsSender SQSSender { get; set; }
 
     /// <summary>
     /// Default constructor. This constructor is used by Lambda to construct the instance. When invoked in a Lambda environment
@@ -27,140 +26,37 @@ public class Functions
     public Functions()
     {
         S3Client = new AmazonS3Client();
-        SQSSender = new SqsSender(new AmazonSQSClient());
     }
 
     /// <summary>
     /// Constructs an instance with a preconfigured S3 client. This can be used for testing the outside of the Lambda environment.
     /// </summary>
     /// <param name="s3Client">The service client to access Amazon S3.</param>
-    public Functions(IAmazonS3 s3Client, IAmazonSQS sqsClient)
+    public Functions(IAmazonS3 s3Client)
     {
         this.S3Client = s3Client;
-        this.SQSSender = new SqsSender(sqsClient);
     }
 
-    /// <summary>
-    /// This method is called for every Lambda invocation. This method takes in an S3 event object and can be used 
-    /// to respond to S3 notifications.
-    /// </summary>
-    /// <param name="evnt">The event for the Lambda function handler to process.</param>
-    /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
-    /// <returns></returns>
-    public async Task PrepareDocxTemplate(S3Event evnt, ILambdaContext context)
-    {
-        var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
-        foreach (var record in eventRecords)
-        {
-            var s3Entity = record.S3;
-            if (s3Entity == null)
-            {
-                continue;
-            }
-            string key = s3Entity.Object.Key; // last portion should be "/template.docx", since that's what triggers this lambda
-            if (record.EventName.StartsWith("s3:ObjectCreated:Copy")) // Skip processing for copy operations
-            {
-                context.Logger.LogLine($"Skipping PrepareDocxTemplate triggered by copy operation for {key}");
-                continue;
-            }
-            if (!key.Contains("/templates/"))
-            {
-                context.Logger.LogLine($"Skipping PrepareDocxTemplate triggered on file NOT inside 'templates/': '{key}'");
-                continue;
-            }
-            string baseKey = key[..(key.LastIndexOf('/') + 1)];
-            string workspace = GetWorkspace(baseKey);
-            string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
-            context.Logger.Log($"Template job {jobId} uploaded; starting...");
-            context.Logger.Log("Retrieving template from S3...");
-            string bucket = s3Entity.Bucket.Name;
-            byte[] docxBytes = await GetBytes(bucket, key, context);
-            context.Logger.Log("Template retrieved successfully; normalizing (step 1A)...");
-            byte[] normalizedBytes;
-            try
-            {
-                var options = new PrepareTemplateOptions()
-                {
-                    GenerateFlatPreview = true,
-                    RemoveCustomProperties = true,
-                    KeepPropertyNames = new List<string>() { "UpdateFields", "PlayMacros" },
-                };
-
-                var normalizeResult = Normalizer.NormalizeTemplate(docxBytes, options.RemoveCustomProperties, options.KeepPropertyNames);
-                normalizedBytes = normalizeResult.NormalizedTemplate;
-                // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
-                context.Logger.Log("Template normalized; building field dictionary (step 1B)...");
-                var fieldDict = Templater.ParseFieldsToDict(normalizeResult.ExtractedFields);
-                context.Logger.Log("Storing field dictionary in S3...");
-                await PutString(bucket, baseKey + "fields.dict.json",
-                    JsonSerializer.Serialize(fieldDict, OpenDocx.OpenDocx.DefaultJsonOptions));
-                context.Logger.Log("Field dictionary stored (so other processes can use it); sending OK1 to SQS...");
-                await SQSSender.SendMessageAsync(context.Logger, "OK1", workspace, jobId);
-
-                context.Logger.Log("Transforming docx to oxpt (step 1C)...");
-                var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
-                if (compileResult.HasErrors)
-                {
-                    throw new Exception("Error while transforming DOCX:\n"
-                        + string.Join('\n', compileResult.Errors));
-                }
-                context.Logger.Log("DOCX transformed; storing oxpt.docx in S3...");
-                await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
-                context.Logger.Log("oxpt.docx stored; sending OK2 message to SQS...");
-                await SQSSender.SendMessageAsync(context.Logger, "OK2", workspace, jobId);
-                context.Logger.Log("Success");
-            }
-            catch (Exception e)
-            {
-                context.Logger.LogError(e.Message);
-                if (e.StackTrace != null)
-                    context.Logger.LogDebug(e.StackTrace);
-                // send SQS message with error info:
-                await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
-                return;
-            }
-            // the following is OUTSIDE the above try/catch block, because we intentionally
-            // do NOT want to report SQS whether it succeeds or fails.
-            context.Logger.Log("Now replacing docx fields prior to markdown conversion (step 1D)...");
-            try
-            {
-                var previewResult = TemplateTransformer.TransformTemplate(
-                    normalizedBytes,
-                    TemplateFormat.PreviewDocx,
-                    null); // field map is ignored when output = TemplateFormat.PreviewDocx
-                if (!previewResult.HasErrors)
-                {
-                    context.Logger.LogInformation("Preview generated; storing preview.obj.docx to S3...");
-                    await PutBytes(bucket, baseKey + "preview.obj.docx", previewResult.Bytes);
-                    // we do NOT report success via SQS, because the previews are not required for basic functionality
-                }
-                else
-                {
-                    context.Logger.LogInformation("Preview failed to generate:\n" + string.Join('\n', previewResult.Errors));
-                    // we do NOT report errors via SQS, because the previews are not required for basic functionality
-                }
-            }
-            catch (Exception e)
-            {
-                // some other random exception, typically an internal error
-                context.Logger.LogInformation("Preview error: " + e.Message);
-            }
-        }
-    }
-
+    // ImportDocxTemplate may be invoked in either of the following ways:
+    //   - AUTOMATICALLY (triggered) when a file named "import.docx" is uploaded into the S3 bucket
+    //   - MANUALLY by sending a simulated S3 event for a DOCX file named *anything else* in the S3 bucket
     public async Task ImportDocxTemplate(S3Event evnt, ILambdaContext context)
     {
+        const string TRIGGER_NAME = "import.docx";
+        const string FINAL_NAME = "template.docx";
+        context.Logger.LogLine($"ImportDocxTemplate invoked with {evnt.Records.Count} records");
         var eventRecords = evnt.Records ?? new List<S3Event.S3EventNotificationRecord>();
         foreach (var record in eventRecords)
         {
+            context.Logger.LogLine($"  ImportDocxTemplate invoked via {record.EventName} on '{record.S3?.Object?.Key}'");
             var s3Entity = record.S3;
             if (s3Entity == null)
             {
                 continue;
             }
-            string key = s3Entity.Object.Key; // last portion should be "/imported.docx", since that's what triggers this lambda
-            if (record.EventName.StartsWith("s3:ObjectCreated:Copy")) // Skip processing for copy operations
-            {
+            string key = s3Entity.Object.Key;
+            if (record.EventName != null && record.EventName.StartsWith("s3:ObjectCreated:Copy"))
+            { // Skip processing for copy operations
                 context.Logger.LogLine($"Skipping ImportDocxTemplate triggered by copy operation for {key}");
                 continue;
             }
@@ -169,7 +65,22 @@ public class Functions
                 context.Logger.LogLine($"Skipping ImportDocxTemplate triggered on file NOT inside '/templates/': '{key}'");
                 continue;
             }
-            string baseKey = key[..(key.LastIndexOf('/') + 1)];
+            var lastNameLoc = key.LastIndexOf('/') + 1;
+            string importName = key[lastNameLoc..]; // TRIGGER_NAME if triggered by S3
+            bool newStorage = importName == TRIGGER_NAME; // otherwise invoked manually for older template
+            string baseKey = key[..lastNameLoc];
+            if (!newStorage)
+            {
+                if (importName.EndsWith(".docx"))
+                {
+                    baseKey += "support/" + importName[..^5] + "/";
+                    context.Logger.LogLine($"  Legacy storage mode: support files will output to '{baseKey}'");
+                }
+                else
+                {
+                    throw new Exception($"Invalid import name: {importName}");
+                }
+            }
             string workspace = GetWorkspace(baseKey);
             string jobId = LastFolder(baseKey); // same as tvid (Template Version ID)
             context.Logger.Log($"Template Import job {jobId} uploaded; starting...");
@@ -178,7 +89,7 @@ public class Functions
             byte[] docxBytes = await GetBytes(bucket, key, context);
             context.Logger.Log("Template retrieved successfully; beginning rename and normalizing (step 1A)...");
             // RenameObject uses COPY, so it should NOT trigger a redundant invocation of PrepareDocxTemplate
-            var renameTask = RenameObject(bucket, key, baseKey + "template.docx", context);
+            var renameTask = newStorage ? RenameObject(bucket, key, baseKey + FINAL_NAME, context) : null;
             byte[] normalizedBytes;
             try
             {
@@ -193,19 +104,16 @@ public class Functions
                 normalizedBytes = normalizeResult.NormalizedTemplate;
                 // await PutBytes(bucket, baseKey + "normalized.obj.docx", normalizedBytes);
                 context.Logger.Log("Template normalized; parsing fields and building logic tree...");
-                var parseResult = Templater.ParseFields(normalizeResult.ExtractedFields, true);
+                var parseResult = Templater.ParseFields(normalizeResult.ExtractedFields, false);
                 var fieldDict = parseResult.ParsedFields;
                 context.Logger.Log("Parsing completed; storing field dictionary in S3...");
                 await PutString(bucket, baseKey + "fields.dict.json",
                     JsonSerializer.Serialize(fieldDict, OpenDocx.OpenDocx.DefaultJsonOptions));
-                // await SQSSender.SendMessageAsync(context.Logger, "OK1", workspace, jobId);
                 context.Logger.Log("Field dictionary stored (so other processes can use it); storing logic.json...");
                 await PutString(bucket, baseKey + "logic.json",
                     JsonSerializer.Serialize(parseResult.LogicTree, OpenDocx.OpenDocx.DefaultJsonOptions));
 
-                context.Logger.Log("Logic tree stored; storing logic.js...");
-                await PutString(bucket, baseKey + "logic.js", parseResult.LegacyLogicModule);
-                context.Logger.Log("Logic module stored.");
+                context.Logger.Log("Logic tree stored.");
                 context.Logger.Log("Transforming docx to oxpt (step 1C)...");
                 var compileResult = Templater.CompileTemplate(normalizedBytes, fieldDict);
                 if (compileResult.HasErrors)
@@ -216,20 +124,15 @@ public class Functions
                 context.Logger.Log("DOCX transformed; storing oxpt.docx in S3...");
                 await PutBytes(bucket, baseKey + "oxpt.docx", compileResult.Bytes);
                 context.Logger.Log("oxpt.docx stored");
-                // await SQSSender.SendMessageAsync(context.Logger, "OK2", workspace, jobId);
-                // context.Logger.Log("Success");
             }
             catch (Exception e)
             {
                 context.Logger.LogError(e.Message);
                 if (e.StackTrace != null)
                     context.Logger.LogDebug(e.StackTrace);
-                // send SQS message with error info:
-                // await SQSSender.SendMessageAsync(context.Logger, "Error: " + e.Message, workspace, jobId, e.Message);
                 return;
             }
-            // the following is OUTSIDE the above try/catch block, because we intentionally
-            // do NOT want to report SQS whether it succeeds or fails.
+            // the following is OUTSIDE the above try/catch block, because we do not really care whether it succeeds or fails.
             context.Logger.Log("Now replacing docx fields prior to markdown conversion (step 1D)...");
             try
             {
@@ -254,7 +157,8 @@ public class Functions
                 // some other random exception, typically an internal error
                 context.Logger.LogInformation("Preview error: " + e.Message);
             }
-            await renameTask; // make sure rename has finished before we move on to the next event
+            if (renameTask != null)
+                await renameTask; // make sure rename has finished before we move on to the next event
         }
     }
 
@@ -287,6 +191,8 @@ public class Functions
                     // sanity check -- make sure this approach works
                     if (!req.Data.Contains($"oxpt://DocumentAssembler/insert/{src}"))
                     {
+                        context.Logger.Log($"Failed to find 'oxpt://DocumentAssembler/insert/{src}' in:");
+                        context.Logger.Log(req.Data);
                         throw new Exception("Unable to determine whether or not to keep Sections in insert operation");
                     }
                 }
@@ -328,7 +234,7 @@ public class Functions
         }
         catch (Exception ex)
         {
-            context.Logger.LogLine($"Exception: {ex.Message}");
+            context.Logger.LogError(ex.ToString());
             return new AssembleResponse(req, false)
             {
                 ErrorMessage = $"Exception: {ex.Message}"
@@ -442,10 +348,10 @@ public class Functions
         {
             // Copy the object to the new location
             await CopyObject(bucket, sourceKey, destinationKey, context);
-            
+
             // Delete the original object
             await DeleteObject(bucket, sourceKey, context);
-            
+
             context.Logger.LogLine($"Renamed {sourceKey} to {destinationKey}");
         }
         catch (Exception e)
