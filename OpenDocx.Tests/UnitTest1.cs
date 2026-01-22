@@ -412,6 +412,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("insertteste.docx", "insertede.docx", false, "inserttestc.xml", "insertteste-composed.docx")]
         [InlineData("insertteste.docx", "insertedf.docx", false, "inserttestc.xml", "inserttestf-composed.docx")]
         [InlineData("DC-Main2SectInsIndirect.docx", "DC-MarginConditional.docx", true, "InsertKeepSectionsTest.xml", "insertkeepsections-composed.docx")]
+        [InlineData("inserr0.docx", "inserr1.docx", false, "inserr.xml", "inserr-composed.docx")]
         public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName)
         {
             var mainData = GetTestXmlData(data);
