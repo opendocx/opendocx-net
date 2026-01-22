@@ -16,7 +16,7 @@
           "problemMatcher": "$msCompile"
         },
         { 
-            "label": ".NET Core Test with debugger", 
+            "label": "test (debug via attach)", 
             "type": "process", 
             "isBackground": true, 
             "command": "dotnet", 
