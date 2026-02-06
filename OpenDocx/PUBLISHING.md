@@ -17,10 +17,10 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 
 ## Package Information
 
-- **Package ID**: OpenDocx
-- **Current Version**: 1.0.0
-- **Target Framework**: .NET 6.0
-- **License**: MIT
+- **Package ID**: OpenDocx.NET
+- **Current Version**: 1.1.2
+- **Target Framework**: .NET 8.0
+- **License**: MPL-2.0
 
 ## Publishing Steps
 
@@ -47,7 +47,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 
 2. Push to NuGet:
    ```bash
-   dotnet nuget push bin/Release/OpenDocx.1.0.0.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
+   dotnet nuget push bin/Release/OpenDocx.NET.1.1.2.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
    ```
 
 ## Package Contents
@@ -55,7 +55,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 The generated package includes:
 
 - **Main Assembly**: `OpenDocx.dll` - The core library
-- **Symbol Package**: `OpenDocx.1.0.0.snupkg` - Debug symbols for easier debugging
+- **Symbol Package**: `OpenDocx.NET.1.1.2.snupkg` - Debug symbols for easier debugging
 - **README**: Package documentation
 - **Dependencies**: All referenced NuGet packages are automatically included as dependencies
 
@@ -63,13 +63,13 @@ The generated package includes:
 
 The package has the following dependencies:
 
-- DocumentFormat.OpenXml (>= 2.19.0)
+- DocumentFormat.OpenXml (>= 3.3.0)
 - Newtonsoft.Json (>= 13.0.3)
-- Microsoft.CodeAnalysis (>= 2.10.0)
-- Microsoft.CSharp (>= 4.7.0)
-- Microsoft.Extensions.DependencyModel (>= 7.0.0)
-- OpenXmlPowerTools-Net6 (>= 4.6.24)
-- System.IO.Packaging (>= 6.0.1)
+- System.IO.Packaging (>= 9.0.1)
+- SkiaSharp (>= 3.119.1)
+- SkiaSharp.NativeAssets.Linux.NoDependencies (>= 3.119.1)
+
+Note: OpenXmlPowerTools is bundled directly into this package.
 
 ## Version Management
 
@@ -83,9 +83,9 @@ To publish a new version:
 
 After successful publication:
 
-1. The package will be available at: https://www.nuget.org/packages/OpenDocx/
+1. The package will be available at: https://www.nuget.org/packages/OpenDocx.NET/
 2. It may take a few minutes to appear in search results
-3. Users can install it with: `dotnet add package OpenDocx`
+3. Users can install it with: `dotnet add package OpenDocx.NET`
 
 ## Troubleshooting
 

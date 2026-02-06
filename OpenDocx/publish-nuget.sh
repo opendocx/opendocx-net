@@ -26,7 +26,7 @@ if [ -z "$1" ]; then
 fi
 
 API_KEY=$1
-PACKAGE_PATH="./bin/Release/OpenDocx.NET.1.0.2.nupkg"
+PACKAGE_PATH="./bin/Release/OpenDocx.NET.1.1.2.nupkg"
 
 # Check if package exists
 if [ ! -f "$PACKAGE_PATH" ]; then
@@ -45,7 +45,7 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Package published successfully!${NC}"
     echo ""
     echo "Your package should be available at:"
-    echo "https://www.nuget.org/packages/OpenDocx/"
+    echo "https://www.nuget.org/packages/OpenDocx.NET/"
     echo ""
     echo "Note: It may take a few minutes for the package to appear in search results."
 else
