@@ -207,6 +207,16 @@ namespace OpenDocx
                     fieldAccumulator.EndBlock();
                     return transformedPara;
                 }
+                else if (element.Name == W.tc)
+                {
+                    // Table cells with multiple paragraphs need their own hierarchical level
+                    fieldAccumulator.BeginBlock();
+                    var transformedCell = new XElement(element.Name,
+                        element.Attributes(),
+                        element.Nodes().Select(n => IdentifyAndNormalizeFields(n, recognizer, fieldAccumulator, comments)));
+                    fieldAccumulator.EndBlock();
+                    return transformedCell;
+                }
                 else if (element.Name == W.lastRenderedPageBreak)
                 {
                     // documents assembled from templates will almost always change pagination, so remove Word's pagination hints
