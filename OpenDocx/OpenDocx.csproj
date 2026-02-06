@@ -8,10 +8,10 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>OpenDocx.NET</PackageId>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <AssemblyInformationalVersion>1.1.0</AssemblyInformationalVersion>
+    <Version>1.1.1</Version>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <FileVersion>1.1.1.0</FileVersion>
+    <AssemblyInformationalVersion>1.1.1</AssemblyInformationalVersion>
     <Authors>OpenDocx</Authors>
     <Company>OpenDocx</Company>
     <Product>OpenDocx.NET</Product>
@@ -22,7 +22,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Version 1.1.0 - Bundled custom build of OpenXmlPowerTools.</PackageReleaseNotes>
+    <PackageReleaseNotes>Version 1.1.1 - Bundled custom build of OpenXmlPowerTools.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 OpenDocx</Copyright>
     
     <!-- Enable package generation -->
