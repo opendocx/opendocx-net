@@ -47,13 +47,8 @@ namespace OpenDocxTemplater.Tests
             // NOTE: doesn't currently support test templates with content controls
             var normalizeResult = FieldExtractor.NormalizeTemplate(File.ReadAllBytes(sourceTemplatePath));
 
-            var fieldList = JsonNode.Parse(normalizeResult.ExtractedFields);
-            var ast = OpenDocx.FieldParser.ParseContentArray(fieldList as JsonArray);
-            // create a map from field ID to nodes in the AST, which before would have been saved in fieldDictPath = templatePath + 'obj.fields.json'
-            var fieldDict = new Dictionary<string, ParsedField>();
-            var atoms = new FieldExprNamer();
-            OpenDocx.FieldParser.BuildFieldDictionary(ast, fieldDict, atoms); // this also atomizes expressions in fields
-            // note: it ALSO mutates ast, adding atom annotations for expressions
+            // Parse the extracted fields to get a field dictionary
+            var fieldDict = Templater.ParseFieldsToDict(normalizeResult.ExtractedFields);
 
             return Templater.CompileTemplate(normalizeResult.NormalizedTemplate, fieldDict);
         }
@@ -140,13 +135,13 @@ namespace OpenDocxTemplater.Tests
         }
 
         [Theory]
-        [InlineData("MissingEndIfPara.docx", "The If in field 1 has no matching EndIf")]
-        [InlineData("MissingEndIfRun.docx", "The If in field 1 has no matching EndIf")]
-        [InlineData("MissingIfRun.docx", "The EndIf in field 2 has no matching If")]
-        [InlineData("MissingIfPara.docx", "The EndIf in field 2 has no matching If")]
-        [InlineData("NonBlockIf.docx", "The If in field 1 has no matching EndIf")]
-        [InlineData("NonBlockEndIf.docx", "The EndIf in field 3 has no matching If")]
-        [InlineData("kMANT.docx", "The EndIf in field 3 has no matching If")]
+        [InlineData("MissingEndIfPara.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]
+        [InlineData("MissingEndIfRun.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]
+        [InlineData("MissingIfRun.docx", "Field 2 (\"endif\"): The 'EndIf' does not have a matching 'If'")]
+        [InlineData("MissingIfPara.docx", "Field 2 (\"endif\"): The 'EndIf' does not have a matching 'If'")]
+        [InlineData("NonBlockIf.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'\nField 3 (\"endif\"): The 'EndIf' does not have a matching 'If'")]
+        [InlineData("NonBlockEndIf.docx", "Field 3 (\"endif\"): The 'EndIf' does not have a matching 'If'")]
+        [InlineData("kMANT.docx", "Field 3 (\"endif\"): The 'EndIf' does not have a matching 'If'")]
         //[InlineData("crasher.docx", "")]
         public void CompileErrors(string name, string message)
         {

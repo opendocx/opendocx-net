@@ -39,26 +39,33 @@ namespace OpenDocx
     {
         public static Dictionary<string, ParsedField> ParseFieldsToDict(string extractedFields)
         {
+            var errorList = new TemplateErrorList();
             var fieldList = JsonNode.Parse(extractedFields);
             // this "dumb" implementation creates a simple template AST, but it does not bother parsing
             // the expressions inside individual fields. A complete implementation would do that, so it
             // could check for errors inside fields!
-            var ast = FieldParser.ParseContentArray(fieldList as JsonArray);
+            var ast = FieldParser.ParseContentArray(fieldList as JsonArray, errorList);
             // create a map from field ID (for DOCX, basially, field number) to nodes in the AST
             var fieldDict = new Dictionary<string, ParsedField>();
             var atoms = new FieldExprNamer();
             FieldParser.BuildFieldDictionary(ast, fieldDict, atoms); // this also atomizes expressions in fields
             // note: it ALSO mutates ast, adding atom annotations for expressions
+            var errors = errorList.ErrorList.Select(e => e.ToString()).ToArray();
+            if (errors.Length > 0)
+            {
+                throw new FieldParseException(string.Join("\n", errors));
+            }
             return fieldDict;
         }
 
         public static ParseFieldsResult ParseFields(string extractedFields, bool generateLegacyLogicModule = false)
         {
+            var errorList = new TemplateErrorList();
             var fieldList = JsonNode.Parse(extractedFields);
             // this "dumb" implementation creates a simple template AST, but it does not bother parsing
             // the expressions inside individual fields. A complete implementation would do that, so it
             // could check for errors inside fields!
-            var ast = FieldParser.ParseContentArray(fieldList as JsonArray);
+            var ast = FieldParser.ParseContentArray(fieldList as JsonArray, errorList);
             // create a map from field ID (for DOCX, basially, field number) to nodes in the AST
             var fieldDict = new Dictionary<string, ParsedField>();
             var atoms = new FieldExprNamer();
@@ -69,6 +76,11 @@ namespace OpenDocx
             if (generateLegacyLogicModule)
             {
                 legacyLogicModule = GetLegacyTemplateModule(logicTree);
+            }
+            var errors = errorList.ErrorList.Select(e => e.ToString()).ToArray();
+            if (errors.Length > 0)
+            {
+                throw new FieldParseException(string.Join("\n", errors));
             }
             return new ParseFieldsResult(fieldDict, logicTree, legacyLogicModule);
         }
