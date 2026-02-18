@@ -28,6 +28,15 @@ namespace OpenDocx;
 
 public class TaskPaneEmbedder
 {
+    private const string AutoShowPropertyName = "Office.AutoShowTaskpaneWithDocument";
+
+    private enum EmbeddedAddInKind
+    {
+        Ours,
+        Theirs,
+        Unrecognizable
+    }
+
     public static byte[] EmbedTaskPane(byte[] docxBytes, string guid, string addInId, string version, string store,
         string storeType, string dockState, bool visibility, double width, uint row)
     {
@@ -311,4 +320,466 @@ public class TaskPaneEmbedder
         }
         return result.ToArray();
     }
+
+    public List<EmbeddedAddInInfo> GetEmbeddedAddIns(Stream docxStream)
+    {
+        var result = new List<EmbeddedAddInInfo>();
+        
+        using (var doc = WordprocessingDocument.Open(docxStream, false))
+        {
+            var webExPart = doc.WebExTaskpanesPart;
+            if (webExPart == null) return result;
+            
+            foreach (var wePart in webExPart.GetPartsOfType<WebExtensionPart>())
+            {
+                var relationshipId = webExPart.GetIdOfPart(wePart);
+                var weInfo = ParseWebExtension(wePart);
+                var tpInfo = FindTaskpaneByRelationshipId(webExPart.Taskpanes, relationshipId);
+                
+                result.Add(new EmbeddedAddInInfo
+                {
+                    WebExtension = weInfo,
+                    Taskpane = tpInfo  // may be null if orphaned
+                });
+            }
+        }
+        return result;
+    }
+
+    public static List<EmbeddedAddInInfo> GetEmbeddedAddIns(byte[] docxBytes)
+    {
+        if (docxBytes == null) throw new ArgumentNullException(nameof(docxBytes));
+
+        using (var stream = new MemoryStream(docxBytes, writable: false))
+        {
+            return new TaskPaneEmbedder().GetEmbeddedAddIns(stream);
+        }
+    }
+
+    public static byte[] EmbedAddIn(
+        byte[] docxBytes,
+        string manifestGuid,
+        string omexAssetId,
+        string version,
+        string dockState,
+        double width,
+        uint row,
+        string store = "en-US",
+        IEnumerable<string> legacyManifestGuids = null,
+        IEnumerable<string> legacyOmexAssetIds = null)
+    {
+        if (docxBytes == null) throw new ArgumentNullException(nameof(docxBytes));
+        if (string.IsNullOrWhiteSpace(manifestGuid)) throw new ArgumentException("Manifest GUID is required.", nameof(manifestGuid));
+        if (string.IsNullOrWhiteSpace(omexAssetId)) throw new ArgumentException("OMEX asset ID is required.", nameof(omexAssetId));
+
+        var addInId = omexAssetId;
+        var marketplaceAssetId = omexAssetId;
+        var storeType = "OMEX";
+
+        var manifestIdentityIds = BuildIdentitySet(manifestGuid, legacyManifestGuids);
+        var marketplaceIdentityIds = BuildIdentitySet(omexAssetId, legacyOmexAssetIds);
+
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            memoryStream.Write(docxBytes, 0, docxBytes.Length);
+
+            using (var document = WordprocessingDocument.Open(memoryStream, true))
+            {
+                var webExPart = document.WebExTaskpanesPart ?? document.AddWebExTaskpanesPart();
+
+                if (webExPart.Taskpanes == null)
+                {
+                    webExPart.Taskpanes = new Wetp.Taskpanes();
+                    webExPart.Taskpanes.AddNamespaceDeclaration("wetp", "http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11");
+                }
+
+                var taskpanes = webExPart.Taskpanes;
+                var parts = webExPart.GetPartsOfType<WebExtensionPart>().ToList();
+                var candidates = new List<(WebExtensionPart Part, string RelationshipId, EmbeddedAddInInfo Info, EmbeddedAddInKind Kind)>();
+
+                foreach (var part in parts)
+                {
+                    var relationshipId = webExPart.GetIdOfPart(part);
+                    var info = new EmbeddedAddInInfo
+                    {
+                        WebExtension = ParseWebExtension(part),
+                        Taskpane = FindTaskpaneByRelationshipId(taskpanes, relationshipId)
+                    };
+
+                    var kind = ClassifyEmbeddedAddIn(info.WebExtension, manifestIdentityIds, marketplaceIdentityIds);
+                    candidates.Add((part, relationshipId, info, kind));
+                }
+
+                var ours = candidates.Where(c => c.Kind == EmbeddedAddInKind.Ours).ToList();
+                var unrecognizable = candidates.Where(c => c.Kind == EmbeddedAddInKind.Unrecognizable).ToList();
+
+                WebExtensionPart selectedPart = null;
+                string selectedRelationshipId = null;
+
+                if (ours.Count > 0)
+                {
+                    selectedPart = ours[0].Part;
+                    selectedRelationshipId = ours[0].RelationshipId;
+                }
+                else
+                {
+                    var reusable = unrecognizable.FirstOrDefault(c => c.Info.Taskpane != null);
+                    if (reusable.Part != null)
+                    {
+                        selectedPart = reusable.Part;
+                        selectedRelationshipId = reusable.RelationshipId;
+                    }
+                }
+
+                if (selectedPart == null)
+                {
+                    selectedPart = webExPart.AddNewPart<WebExtensionPart>();
+                    selectedRelationshipId = webExPart.GetIdOfPart(selectedPart);
+                }
+
+                SetWebExtension(
+                    selectedPart,
+                    manifestGuid,
+                    addInId,
+                    version,
+                    store,
+                    storeType,
+                    true,
+                    marketplaceAssetId);
+
+                EnsureTaskpane(
+                    taskpanes,
+                    selectedRelationshipId,
+                    dockState,
+                    false,
+                    width,
+                    row);
+
+                foreach (var candidate in candidates)
+                {
+                    if (candidate.Part == selectedPart)
+                    {
+                        continue;
+                    }
+
+                    if (candidate.Kind == EmbeddedAddInKind.Ours || candidate.Kind == EmbeddedAddInKind.Unrecognizable)
+                    {
+                        RemoveTaskpaneByRelationshipId(taskpanes, candidate.RelationshipId);
+                        webExPart.DeletePart(candidate.Part);
+                    }
+                }
+            }
+
+            return memoryStream.ToArray();
+        }
+    }
+
+    private static WebExtensionInfo ParseWebExtension(WebExtensionPart wePart)
+    {
+        if (wePart == null || wePart.WebExtension == null)
+        {
+            return new WebExtensionInfo();
+        }
+
+        var webExtension = wePart.WebExtension;
+        var refs = new List<StoreReferenceInfo>();
+
+        var primaryRef = webExtension.WebExtensionStoreReference;
+        if (primaryRef != null)
+        {
+            refs.Add(new StoreReferenceInfo
+            {
+                Id = primaryRef.Id ?? string.Empty,
+                StoreType = primaryRef.StoreType ?? string.Empty,
+                Store = primaryRef.Store ?? string.Empty,
+                Version = primaryRef.Version ?? string.Empty
+            });
+        }
+
+        var alternateRefs = webExtension.WebExtensionReferenceList?
+            .Elements<We.WebExtensionStoreReference>()
+            .ToList();
+        if (alternateRefs != null)
+        {
+            foreach (var alternateRef in alternateRefs)
+            {
+                refs.Add(new StoreReferenceInfo
+                {
+                    Id = alternateRef.Id ?? string.Empty,
+                    StoreType = alternateRef.StoreType ?? string.Empty,
+                    Store = alternateRef.Store ?? string.Empty,
+                    Version = alternateRef.Version ?? string.Empty
+                });
+            }
+        }
+
+        var autoShow = false;
+        var property = webExtension.WebExtensionPropertyBag?
+            .Elements<We.WebExtensionProperty>()
+            .FirstOrDefault(p => string.Equals(p.Name, AutoShowPropertyName, StringComparison.OrdinalIgnoreCase));
+        if (property != null)
+        {
+            if (bool.TryParse(property.Value, out var parsedBool))
+            {
+                autoShow = parsedBool;
+            }
+            else
+            {
+                try
+                {
+                    autoShow = XmlConvert.ToBoolean(property.Value);
+                }
+                catch
+                {
+                    autoShow = false;
+                }
+            }
+        }
+
+        return new WebExtensionInfo
+        {
+            Id = webExtension.Id ?? string.Empty,
+            StoreReferences = refs.ToArray(),
+            AutoShow = autoShow
+        };
+    }
+
+    private static TaskPaneInfo FindTaskpaneByRelationshipId(Taskpanes taskpanes, string relationshipId)
+    {
+        if (taskpanes == null || string.IsNullOrWhiteSpace(relationshipId))
+        {
+            return null;
+        }
+
+        var webExtensionPartReference = taskpanes
+            .Descendants<Wetp.WebExtensionPartReference>()
+            .FirstOrDefault(r => r.Id == relationshipId);
+        if (webExtensionPartReference == null)
+        {
+            return null;
+        }
+
+        var taskpane = webExtensionPartReference.Parent as WebExtensionTaskpane;
+        if (taskpane == null)
+        {
+            return null;
+        }
+
+        return new TaskPaneInfo
+        {
+            PartRelationshipId = relationshipId,
+            DockState = taskpane.DockState ?? string.Empty,
+            Visibility = taskpane.Visibility ?? false,
+            Width = taskpane.Width ?? 0,
+            Row = taskpane.Row ?? 0
+        };
+    }
+
+    private static EmbeddedAddInKind ClassifyEmbeddedAddIn(
+        WebExtensionInfo webExtension,
+        IReadOnlyCollection<string> manifestIdentityIds,
+        IReadOnlyCollection<string> marketplaceIdentityIds)
+    {
+        if (webExtension == null)
+        {
+            return EmbeddedAddInKind.Unrecognizable;
+        }
+
+        var validReferenceIds = (webExtension.StoreReferences ?? Array.Empty<StoreReferenceInfo>())
+            .Where(r => !string.IsNullOrWhiteSpace(r.Id))
+            .Select(r => r.Id.Trim())
+            .ToList();
+
+        foreach (var referenceId in validReferenceIds)
+        {
+            if (MatchesAnyId(referenceId, manifestIdentityIds))
+            {
+                return EmbeddedAddInKind.Ours;
+            }
+
+            if (MatchesAnyId(referenceId, marketplaceIdentityIds))
+            {
+                return EmbeddedAddInKind.Ours;
+            }
+        }
+
+        if (MatchesAnyId(webExtension.Id, manifestIdentityIds))
+        {
+            return EmbeddedAddInKind.Ours;
+        }
+
+        return validReferenceIds.Count == 0
+            ? EmbeddedAddInKind.Unrecognizable
+            : EmbeddedAddInKind.Theirs;
+    }
+
+    private static HashSet<string> BuildIdentitySet(string currentValue, IEnumerable<string> legacyValues)
+    {
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(currentValue))
+        {
+            values.Add(currentValue.Trim());
+        }
+
+        if (legacyValues != null)
+        {
+            foreach (var value in legacyValues)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    values.Add(value.Trim());
+                }
+            }
+        }
+
+        return values;
+    }
+
+    private static bool MatchesAnyId(string candidate, IReadOnlyCollection<string> ids)
+    {
+        if (string.IsNullOrWhiteSpace(candidate) || ids == null || ids.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var id in ids)
+        {
+            if (IdsMatch(candidate, id))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IdsMatch(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        if (Guid.TryParse(left, out var leftGuid) && Guid.TryParse(right, out var rightGuid))
+        {
+            return leftGuid == rightGuid;
+        }
+
+        return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void SetWebExtension(
+        WebExtensionPart webExtensionPart,
+        string manifestGuid,
+        string addInId,
+        string version,
+        string store,
+        string storeType,
+        bool autoShow,
+        string marketplaceAssetId)
+    {
+        var webExtension = new We.WebExtension() { Id = manifestGuid };
+        webExtension.AddNamespaceDeclaration("we", "http://schemas.microsoft.com/office/webextensions/webextension/2010/11");
+
+        webExtension.Append(new We.WebExtensionStoreReference()
+        {
+            Id = addInId,
+            Version = version,
+            Store = store,
+            StoreType = storeType
+        });
+
+        var referenceList = new We.WebExtensionReferenceList();
+        if (IdsMatch(addInId, manifestGuid) == false)
+        {
+            referenceList.Append(new We.WebExtensionStoreReference()
+            {
+                Id = manifestGuid,
+                Version = version,
+                Store = store,
+                StoreType = storeType
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(marketplaceAssetId)
+            && !string.Equals(addInId, marketplaceAssetId, StringComparison.OrdinalIgnoreCase))
+        {
+            referenceList.Append(new We.WebExtensionStoreReference()
+            {
+                Id = marketplaceAssetId,
+                Version = version,
+                Store = store,
+                StoreType = "OMEX"
+            });
+        }
+        webExtension.Append(referenceList);
+
+        var webExtensionPropertyBag = new We.WebExtensionPropertyBag();
+        webExtensionPropertyBag.Append(new We.WebExtensionProperty()
+        {
+            Name = AutoShowPropertyName,
+            Value = XmlConvert.ToString(autoShow)
+        });
+        webExtension.Append(webExtensionPropertyBag);
+
+        webExtension.Append(new We.WebExtensionBindingList());
+
+        var snapshot = new We.Snapshot();
+        snapshot.AddNamespaceDeclaration("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        webExtension.Append(snapshot);
+
+        webExtensionPart.WebExtension = webExtension;
+    }
+
+    private static void EnsureTaskpane(Taskpanes taskpanes, string relationshipId, string dockState, bool visibility, double width, uint row)
+    {
+        var existingReference = taskpanes
+            .Descendants<Wetp.WebExtensionPartReference>()
+            .FirstOrDefault(r => r.Id == relationshipId);
+
+        if (existingReference != null)
+        {
+            var existingTaskpane = existingReference.Parent as WebExtensionTaskpane;
+            if (existingTaskpane != null)
+            {
+                existingTaskpane.DockState = dockState;
+                existingTaskpane.Visibility = visibility;
+                existingTaskpane.Width = width;
+                existingTaskpane.Row = row;
+            }
+            return;
+        }
+
+        var newTaskpane = new Wetp.WebExtensionTaskpane()
+        {
+            DockState = dockState,
+            Visibility = visibility,
+            Width = width,
+            Row = row
+        };
+        var webExtensionPartReference = new Wetp.WebExtensionPartReference() { Id = relationshipId };
+        webExtensionPartReference.AddNamespaceDeclaration("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+
+        newTaskpane.Append(webExtensionPartReference);
+        taskpanes.Append(newTaskpane);
+    }
+
+    private static void RemoveTaskpaneByRelationshipId(Taskpanes taskpanes, string relationshipId)
+    {
+        if (taskpanes == null || string.IsNullOrWhiteSpace(relationshipId))
+        {
+            return;
+        }
+
+        var webExtensionPartReference = taskpanes
+            .Descendants<Wetp.WebExtensionPartReference>()
+            .FirstOrDefault(r => r.Id == relationshipId);
+
+        if (webExtensionPartReference?.Parent != null)
+        {
+            webExtensionPartReference.Parent.Remove();
+        }
+    }
+
 }

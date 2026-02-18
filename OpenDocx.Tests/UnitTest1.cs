@@ -465,11 +465,77 @@ namespace OpenDocxTemplater.Tests
         [InlineData("addins_one.docx", 1)]
         [InlineData("addins_multi.docx", 2)]
         [InlineData("addins_none.docx", 0)]
+        [InlineData("TaskPaneIssue.docx", 1)]
         public async Task GetTaskPaneInfo(string name, int expectedCount)
         {
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
             var metadata = TaskPaneEmbedder.GetTaskPaneInfo(bytes);
             Assert.Equal(expectedCount, metadata.Length);
+        }
+
+        [Theory]
+        [InlineData("addins_one.docx", 1)]
+        [InlineData("addins_multi.docx", 2)]
+        [InlineData("addins_none.docx", 0)]
+        public async Task GetEmbeddedAddIns(string name, int expectedCount)
+        {
+            var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
+            var metadata = TaskPaneEmbedder.GetEmbeddedAddIns(bytes);
+            Assert.Equal(expectedCount, metadata.Count);
+        }
+
+        [Fact]
+        public async Task EmbedAddIn_CreatesSingleRecognizableEntry()
+        {
+            const string manifestGuid = "8eb22e22-73c3-40a5-a8d8-ddae1c07065a";
+            const string marketplaceId = "wa104380862";
+
+            var bytes = await File.ReadAllBytesAsync(GetTestTemplate("addins_existing.docx"));
+            var modifiedBytes = TaskPaneEmbedder.EmbedAddIn(
+                bytes,
+                manifestGuid,
+                marketplaceId,
+                "1.1.0.0",
+                "right",
+                350,
+                4,
+                "en-US");
+
+            var embeddedAddIns = TaskPaneEmbedder.GetEmbeddedAddIns(modifiedBytes);
+            var ours = embeddedAddIns.Where(a =>
+                string.Equals(a.WebExtension.Id, manifestGuid, StringComparison.OrdinalIgnoreCase)
+                || a.WebExtension.StoreReferences.Any(r => string.Equals(r.Id, manifestGuid, StringComparison.OrdinalIgnoreCase))
+                || a.WebExtension.StoreReferences.Any(r => string.Equals(r.Id, marketplaceId, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            Assert.Single(ours);
+            Assert.True(ours[0].WebExtension.AutoShow);
+            Assert.NotNull(ours[0].Taskpane);
+        }
+
+        [Fact]
+        public async Task EmbedAddIn_AcceptsLegacyIdentityArrays()
+        {
+            const string manifestGuid = "8eb22e22-73c3-40a5-a8d8-ddae1c07065a";
+            const string marketplaceId = "wa104380862";
+
+            var bytes = await File.ReadAllBytesAsync(GetTestTemplate("addins_none.docx"));
+            var modifiedBytes = TaskPaneEmbedder.EmbedAddIn(
+                bytes,
+                manifestGuid,
+                marketplaceId,
+                "1.1.0.0",
+                "right",
+                350,
+                4,
+                "en-US",
+                new[] { "8eb22e22-73c3-40a5-a8d8-ddae1c07068a" },
+                new[] { "wa200008877" });
+
+            var embeddedAddIns = TaskPaneEmbedder.GetEmbeddedAddIns(modifiedBytes);
+            Assert.Single(embeddedAddIns);
+            Assert.True(embeddedAddIns[0].WebExtension.AutoShow);
+            Assert.NotNull(embeddedAddIns[0].Taskpane);
         }
 
         //[Fact]
