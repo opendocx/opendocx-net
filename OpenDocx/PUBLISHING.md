@@ -18,7 +18,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 ## Package Information
 
 - **Package ID**: OpenDocx.NET
-- **Current Version**: 1.1.2
+- **Current Version**: 1.1.3
 - **Target Framework**: .NET 8.0
 - **License**: MPL-2.0
 
@@ -47,7 +47,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 
 2. Push to NuGet:
    ```bash
-   dotnet nuget push bin/Release/OpenDocx.NET.1.1.2.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
+   dotnet nuget push bin/Release/OpenDocx.NET.1.1.3.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
    ```
 
 ## Package Contents
@@ -55,7 +55,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 The generated package includes:
 
 - **Main Assembly**: `OpenDocx.dll` - The core library
-- **Symbol Package**: `OpenDocx.NET.1.1.2.snupkg` - Debug symbols for easier debugging
+- **Symbol Package**: `OpenDocx.NET.1.1.3.snupkg` - Debug symbols for easier debugging
 - **README**: Package documentation
 - **Dependencies**: All referenced NuGet packages are automatically included as dependencies
 
