@@ -37,7 +37,10 @@ public static class Assembler
 
     public static async Task<AssembleResult> AssembleDocAsync(string templateFile, XElement data, string outputFile, List<DocxSource> sources)
     {
-        var result = await AssembleDocAsync(File.ReadAllBytes(templateFile), data, sources);
+        byte[] templateBytes = File.ReadAllBytes(templateFile);
+        WmlDocument templateDoc = new(templateFile, templateBytes);
+        WmlDocument wmlAssembledDoc = await DocumentComposer.ComposeDocument(templateDoc, data, sources);
+        var result = new AssembleResult(wmlAssembledDoc.DocumentByteArray);
         if (!string.IsNullOrEmpty(outputFile))
         {
             //// save the output (even in the case of error, since error messages are in the file)

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<_odx>
+	<A>
+		<A0>
+			<a>Martin Braun</a>
+			<b>oxpt://DocumentAssembler/insert/1</b>
+			<c/>
+		</A0>
+		<A0>
+			<a>Margery Duke</a>
+			<b>oxpt://DocumentAssembler/insert/2</b>
+			<c/>
+		</A0>
+		<A0>
+			<a>John Smith</a>
+			<b>oxpt://DocumentAssembler/insert/3</b>
+			<c/>
+		</A0>
+		<A0>
+			<a>Edward Johnson</a>
+			<b>oxpt://DocumentAssembler/insert/4</b>
+			<c/>
+		</A0>
+	</A>
+</_odx>

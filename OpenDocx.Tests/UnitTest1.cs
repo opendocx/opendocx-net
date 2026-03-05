@@ -425,6 +425,69 @@ namespace OpenDocxTemplater.Tests
         }
 
         [Theory]
+        [InlineData("A.docx", "B.docx", "insert_list_implicit.xml", "A_composed.docx")]
+        [InlineData("A2.docx", "B.docx", "insert_list_implicit.xml", "A2_composed.docx")]
+        public async Task ComposeDocumentListImplicit(string name, string insert, string data, string outName)
+        {
+            var mainData = GetTestXmlData(data);
+            var dummy = GetTestTemplate(insert); // to copy the template where it needs to go
+            var result3 = await Assembler.AssembleDocAsync(
+                GetTestTemplate(name),
+                mainData,
+                GetTestOutput(outName),
+                null);
+            Assert.True(result3.Bytes.Length > 0);
+        }
+
+        [Theory]
+        [InlineData("A_indirect.docx", "B.docx", "insert_list_indirect.xml", "A_indirect_composed.docx")]
+        [InlineData("A2_indirect.docx", "B.docx", "insert_list_indirect.xml", "A2_indirect_composed.docx")]
+        public async Task ComposeDocumentListIndirect(string name, string insert, string data, string outName)
+        {
+            var b = GetTestTemplate(insert); // to copy the template where it needs to go
+            var mainData = GetTestXmlData(data);
+            List<DocxSource> sources = new List<DocxSource>();
+            foreach (var a0 in mainData.Element("A")?.Elements("A0") ?? Enumerable.Empty<XElement>())
+            {
+                var insertRef = (string?)a0.Element("b");
+                if (insertRef != null && TryGetInsertTail(insertRef, out var id))
+                {
+                    sources.Add(new TemplateSource(b, a0, id));
+                }
+            }
+            var result3 = await Assembler.AssembleDocAsync(
+                GetTestTemplate(name),
+                mainData,
+                GetTestOutput(outName),
+                sources);
+            Assert.True(result3.Bytes.Length > 0);
+        }
+
+        [Fact]
+        public async Task ComposeDocumentListManual()
+        {
+            byte[] aBytes = File.ReadAllBytes(GetTestTemplate("A_indirect.docx"));
+            byte[] bBytes = File.ReadAllBytes(GetTestTemplate("B.docx"));
+            var mainData = GetTestXmlData("insert_list_indirect.xml");
+            List<DocxSource> sources = new List<DocxSource>();
+            foreach (var a0 in mainData.Element("A")?.Elements("A0") ?? Enumerable.Empty<XElement>())
+            {
+                var insertRef = (string?)a0.Element("b");
+                if (insertRef != null && TryGetInsertTail(insertRef, out var id))
+                {
+                    var innerResult = await Assembler.AssembleDocAsync(bBytes, a0, null);
+                    sources.Add(new DocxSource(new WmlDocument(new OpenXmlPowerToolsDocument(innerResult.Bytes)), id));
+                }
+            }
+            var result = await Assembler.AssembleDocAsync(
+                aBytes,
+                mainData,
+                sources);
+            Assert.True(result.Bytes.Length > 0);
+            await File.WriteAllBytesAsync(GetTestOutput("A_indirect_manual_composed.docx"), result.Bytes);
+        }
+
+        [Theory]
         [InlineData("addins_none.docx", "addins_none_one_added.docx")]
         [InlineData("addins_existing.docx", "addins_existing_one_added.docx")]
         [InlineData("addins_one.docx", "addins_one_one_added(updated).docx")]
@@ -637,5 +700,34 @@ namespace OpenDocxTemplater.Tests
             return sb.ToString();
         }
 
+        static bool TryGetInsertTail(string insertRef, out string tail)
+        {
+            tail = string.Empty;
+            const string marker = "/insert/";
+
+            if (string.IsNullOrWhiteSpace(insertRef))
+                return false;
+
+            if (Uri.TryCreate(insertRef, UriKind.Absolute, out var uri))
+            {
+                var path = uri.AbsolutePath; // e.g. "/insert/1"
+                var i = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (i >= 0)
+                {
+                    tail = path[(i + marker.Length)..]; // "1"
+                    return tail.Length > 0;
+                }
+                return false;
+            }
+
+            var j = insertRef.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (j >= 0)
+            {
+                tail = insertRef[(j + marker.Length)..];
+                return tail.Length > 0;
+            }
+
+            return false;
+        }
     }
 }
