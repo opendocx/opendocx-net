@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - 
 
+## [1.1.4] - 2026-06-18
+
+### Changed
+- Bumped OpenDocx.NET package version metadata to 1.1.4
+- Updated bundled OpenXmlPowerTools with the latest insert-processing changes in `DocumentBuilder`/`DocumentComposer`
+
+### Fixed
+- Fixed repeated insert-processing scenarios (where the same insert is handled multiple times), including image relationship rewrite handling in embedded OpenXmlPowerTools
+
 ## [1.1.3] - 2026-03-05
 
 ### Changed
@@ -67,7 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Field extraction and replacement
 - Comment management utilities
 
-[Unreleased]: https://github.com/opendocx/opendocx-net/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/opendocx/opendocx-net/compare/v1.1.4...HEAD
+[1.1.4]: https://github.com/opendocx/opendocx-net/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/opendocx/opendocx-net/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/opendocx/opendocx-net/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/opendocx/opendocx-net/compare/v1.1.0...v1.1.1
