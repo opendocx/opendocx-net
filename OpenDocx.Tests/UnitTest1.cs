@@ -18,6 +18,7 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json.Linq;
 using System.Text.Json.Serialization;
 using System.Xml.Schema;
+using System.IO.Compression;
 
 namespace OpenDocxTemplater.Tests
 {
@@ -165,6 +166,27 @@ namespace OpenDocxTemplater.Tests
             // oddly, Word will read this file (SmartTags.docx) without complaint, but it's still (apparently) invalid?
             // (check whether it is REALLY invalid, or whether we should patch ValidateDocument to accept it?)
             Assert.True(result.HasErrors);
+        }
+
+        [Fact]
+        public void ValidateDocument_CatchesInvalidMcIgnorablePrefix()
+        {
+            var tempDocxPath = Path.Combine(Path.GetTempPath(), $"odx-invalid-mc-{Guid.NewGuid():N}.docx");
+            try
+            {
+                CreateDocxWithInvalidMcIgnorablePrefix(tempDocxPath);
+
+                var validator = new Validator();
+                var result = validator.ValidateDocument(tempDocxPath);
+
+                Assert.True(result.HasErrors);
+                Assert.Contains("Ignorable attribute is invalid", result.ErrorList);
+            }
+            finally
+            {
+                if (File.Exists(tempDocxPath))
+                    File.Delete(tempDocxPath);
+            }
         }
 
         [Fact]
@@ -728,6 +750,44 @@ namespace OpenDocxTemplater.Tests
             }
 
             return false;
+        }
+
+        private static void CreateDocxWithInvalidMcIgnorablePrefix(string outputPath)
+        {
+            const string mcNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
+            using (var doc = WordprocessingDocument.Create(outputPath, DocumentFormat.OpenXml.WordprocessingDocumentType.Document))
+            {
+                var mainPart = doc.AddMainDocumentPart();
+                mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document(
+                    new DocumentFormat.OpenXml.Wordprocessing.Body(
+                        new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                            new DocumentFormat.OpenXml.Wordprocessing.Run(
+                                new DocumentFormat.OpenXml.Wordprocessing.Text("x")))));
+            }
+
+            using (var zip = new ZipArchive(File.Open(outputPath, FileMode.Open, FileAccess.ReadWrite), ZipArchiveMode.Update))
+            {
+                var entry = zip.GetEntry("word/document.xml");
+                XDocument xDoc;
+                using (var stream = entry.Open())
+                {
+                    xDoc = XDocument.Load(stream, LoadOptions.PreserveWhitespace);
+                }
+
+                var root = xDoc.Root;
+                root.SetAttributeValue(XNamespace.Xmlns + "mc", mcNs);
+                root.SetAttributeValue(XName.Get("Ignorable", mcNs), "w14");
+                var w14Decl = root.Attributes().FirstOrDefault(a => a.IsNamespaceDeclaration && a.Name.LocalName == "w14");
+                w14Decl?.Remove();
+
+                entry.Delete();
+                var newEntry = zip.CreateEntry("word/document.xml");
+                using (var stream = newEntry.Open())
+                {
+                    xDoc.Save(stream);
+                }
+            }
         }
     }
 }
