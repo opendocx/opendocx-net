@@ -342,7 +342,7 @@ namespace OpenDocx
                             fieldAccumulator.BeginBlock();
                             var transformedContent = IdentifyAndNormalizeFields(
                                 coalescedParagraph, FieldRecognizer.Default, fieldAccumulator, comments);
-                            fieldAccumulator.EndBlock();
+                            fieldAccumulator.EndBlock(promoteSingleField: true);
                             return transformedContent;
                         }
                     }
@@ -352,7 +352,7 @@ namespace OpenDocx
                     var transformedParaContent = element.Nodes()
                         .Select(n => IdentifyAndNormalizeFields(n, FieldRecognizer.Default, fieldAccumulator, comments))
                         .ToArray();
-                    fieldAccumulator.EndBlock();
+                    fieldAccumulator.EndBlock(promoteSingleField: true);
                     return new XElement(element.Name, element.Attributes(), transformedParaContent);
                 }
                 else if (element.Name == W.lastRenderedPageBreak) {

@@ -204,12 +204,14 @@ namespace OpenDocx
                 {
                     fieldAccumulator.BeginBlock();
                     var transformedPara = ProcessParagraphContent(element, recognizer, fieldAccumulator, comments);
-                    fieldAccumulator.EndBlock();
+                    fieldAccumulator.EndBlock(promoteSingleField: true);
                     return transformedPara;
                 }
                 else if (element.Name == W.tc)
                 {
                     // Table cells with multiple paragraphs need their own hierarchical level
+                    // Unlike paragraphs, a field-only cell must not be promoted out of the
+                    // cell. Fields in different cells are never in the same valid container.
                     fieldAccumulator.BeginBlock();
                     var transformedCell = new XElement(element.Name,
                         element.Attributes(),

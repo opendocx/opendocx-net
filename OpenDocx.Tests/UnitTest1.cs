@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using DocumentFormat.OpenXml.Packaging;
+using Wp = DocumentFormat.OpenXml.Wordprocessing;
 using OpenXmlPowerTools;
 using OpenDocx;
 using FieldExtractor = OpenDocx.Normalizer; // instead of old/legacy field extractor!
@@ -133,6 +134,36 @@ namespace OpenDocxTemplater.Tests
             // make sure there are no nested content controls
             afterCompiling.MainDocumentPart.Element(W.body).Elements(W.sdt).ToList().ForEach(
                 cc => Assert.Null(cc.Descendants(W.sdt).FirstOrDefault()));
+        }
+
+        [Fact]
+        public void NormalizeTemplate_PreservesTableCellBoundariesForSingleFields()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Table(
+                            new Wp.TableRow(
+                                new Wp.TableCell(new Wp.Paragraph(new Wp.Run(new Wp.Text("{[list items]}")))),
+                                new Wp.TableCell(new Wp.Paragraph(new Wp.Run(new Wp.Text("{[endlist]}"))))))));
+                main.Document.Save();
+            }
+
+            var result = FieldExtractor.NormalizeTemplate(stream.ToArray(), removeCustomProperties: false);
+            var extracted = JsonNode.Parse(result.ExtractedFields).AsArray();
+
+            var table = Assert.IsType<JsonArray>(Assert.Single(extracted));
+            Assert.Equal(2, table.Count);
+            Assert.All(table, item =>
+            {
+                var cell = Assert.IsType<JsonArray>(item);
+                Assert.Single(cell);
+                Assert.IsType<JsonObject>(cell[0]);
+            });
         }
 
         [Theory]

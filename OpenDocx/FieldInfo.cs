@@ -34,12 +34,12 @@ namespace OpenDocx
             blocks.Peek().RegisterOtherContent();
         }
 
-        public void EndBlock()
+        public void EndBlock(bool promoteSingleField = false)
         {
             var block = blocks.Pop();
             if (!block.IsEmpty)
             {
-                if (block.FieldCount == 1 && !block.HasOtherContent)
+                if (promoteSingleField && block.FieldCount == 1 && !block.HasOtherContent)
                     blocks.Peek().AddField(block.GetItem(0));
                 else
                     blocks.Peek().AddField(block);
