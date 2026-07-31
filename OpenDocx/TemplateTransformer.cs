@@ -279,6 +279,46 @@ namespace OpenDocx
                             return newPara;
                         }
                         // force single metadata up to block level
+                        var nonMetadataNodes = element.Nodes()
+                            .Where(n => n != child && !(n is XElement e && e.Name == W.pPr))
+                            .ToList();
+                        var childPosition = element.Nodes().ToList().IndexOf(child);
+                        var graphicBeforeMetadata = element.Nodes()
+                            .Take(childPosition)
+                            .OfType<XElement>()
+                            .Any(ContainsGraphic);
+
+                        if (graphicBeforeMetadata)
+                        {
+                            var newPara = new XElement(element);
+                            var newMeta = newPara.Elements()
+                                .First(n => s_MetaToForceToBlock.Contains(n.Name));
+                            var errorMessage = string.Format(
+                                "Error: The '{0}' cannot follow graphic content in the same paragraph when promoted to block level.",
+                                child.Name.LocalName.ToLower());
+                            newMeta.ReplaceWith(CreateRunErrorMessage(child, errorMessage, te));
+                            return newPara;
+                        }
+
+                        // A graphic-only paragraph needs to become content between the
+                        // block-level start and end markers.  Keeping it inside the
+                        // metadata would cause NormalizeRepeatAndConditional to remove
+                        // it while it builds that range.
+                        var hasGraphicAfterMetadata = nonMetadataNodes
+                            .OfType<XElement>()
+                            .Any(ContainsGraphic);
+                        if (hasGraphicAfterMetadata)
+                        {
+                            return new List<object>
+                            {
+                                new XElement(child.Name, child.Attributes()),
+                                new XElement(W.p,
+                                    element.Attributes(),
+                                    element.Elements(W.pPr),
+                                    nonMetadataNodes)
+                            };
+                        }
+
                         var meta = new XElement(child.Name,
                             child.Attributes(),
                             new XElement(W.p,
@@ -329,6 +369,11 @@ namespace OpenDocx
                     element.Nodes().Select(n => ForceBlockLevelAsAppropriate(n, te)));
             }
             return node;
+        }
+
+        private static bool ContainsGraphic(XElement element)
+        {
+            return element.Descendants(W.drawing).Any() || element.Descendants(W.pict).Any();
         }
 
         // The following method is written using tree modification, not RPFT, because it is easier to write in this fashion.

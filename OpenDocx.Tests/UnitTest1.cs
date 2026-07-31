@@ -166,6 +166,70 @@ namespace OpenDocxTemplater.Tests
             });
         }
 
+        [Fact]
+        public void NormalizeTemplate_TreatsIfBeforeDrawingAsBlockLevel()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Paragraph(
+                            new Wp.Run(new Wp.Text("{[if isOLC]}")),
+                            new Wp.Run(new Wp.Drawing())),
+                        new Wp.Paragraph(new Wp.Run(new Wp.Text("{[endif]}")))));
+                main.Document.Save();
+            }
+
+            var result = FieldExtractor.NormalizeTemplate(
+                stream.ToArray(), removeCustomProperties: false);
+            var extracted = JsonNode.Parse(result.ExtractedFields).AsArray();
+            var part = Assert.IsType<JsonArray>(Assert.Single(extracted));
+
+            Assert.Equal(2, part.Count);
+            Assert.All(part, item => Assert.IsType<JsonObject>(item));
+
+            var fieldDict = Templater.ParseFieldsToDict(result.ExtractedFields);
+            var transformResult = Templater.CompileTemplate(result.NormalizedTemplate, fieldDict);
+            Assert.False(transformResult.HasErrors, string.Join('\n', transformResult.Errors ?? Array.Empty<string>()));
+
+            using var transformed = WordprocessingDocument.Open(
+                new MemoryStream(transformResult.Bytes), false);
+            Assert.NotNull(transformed.MainDocumentPart?.Document.Body
+                .Descendants<Wp.Drawing>().FirstOrDefault());
+        }
+
+        [Fact]
+        public void NormalizeTemplate_DoesNotPromoteIfAfterDrawing()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Paragraph(
+                            new Wp.Run(new Wp.Drawing()),
+                            new Wp.Run(new Wp.Text("{[if isOLC]}"))),
+                        new Wp.Paragraph(new Wp.Run(new Wp.Text("{[endif]}")))));
+                main.Document.Save();
+            }
+
+            var result = FieldExtractor.NormalizeTemplate(
+                stream.ToArray(), removeCustomProperties: false);
+            var extracted = JsonNode.Parse(result.ExtractedFields).AsArray();
+            var part = Assert.IsType<JsonArray>(Assert.Single(extracted));
+
+            Assert.IsType<JsonArray>(part[0]);
+            Assert.IsType<JsonObject>(part[1]);
+
+            Assert.Throws<FieldParseException>(
+                () => Templater.ParseFieldsToDict(result.ExtractedFields));
+        }
+
         [Theory]
         [InlineData("MissingEndIfPara.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]
         [InlineData("MissingEndIfRun.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]

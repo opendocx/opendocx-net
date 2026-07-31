@@ -557,10 +557,25 @@ namespace OpenDocx
             if (fieldReplacements.Count == 1)
             {
                 var fld = fieldReplacements[0].match;
-                var nonFieldText = paraContents[..fld.Index] + paraContents[(fld.Index + fld.Length)..];
-                if (!string.IsNullOrWhiteSpace(nonFieldText))
+                var before = paraContents[..fld.Index];
+                var after = paraContents[(fld.Index + fld.Length)..];
+                if (!string.IsNullOrWhiteSpace(before))
                 {
                     fieldAccumulator.RegisterNonFieldContentInBlock();
+                }
+                else if (!string.IsNullOrWhiteSpace(after))
+                {
+                    // UnicodeMapper represents non-text run children (including drawings)
+                    // with U+0001.  If the only content after the field is whitespace and
+                    // those markers, confirm that the markers represent supported graphic
+                    // content before allowing block-level promotion.
+                    var afterWithoutNonTextMarkers = after.Replace(
+                        UnicodeMapper.StartOfHeading.ToString(), String.Empty);
+                    if (!string.IsNullOrWhiteSpace(afterWithoutNonTextMarkers)
+                        || !ContainsGraphic(paragraph))
+                    {
+                        fieldAccumulator.RegisterNonFieldContentInBlock();
+                    }
                 }
             }
 
@@ -668,6 +683,16 @@ namespace OpenDocx
                 .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
                 .Select(RunToString)
                 .StringConcatenate();
+        }
+
+        private static bool ContainsGraphic(XElement paragraph)
+        {
+            return paragraph
+                .DescendantsTrimmed(W.txbxContent)
+                .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
+                .Any(r => !r.Elements(W.t).Any()
+                    && (r.Descendants(W.drawing).Any() || r.Descendants(W.pict).Any())
+                    && !r.Descendants(W.t).Any(t => !string.IsNullOrWhiteSpace((string)t)));
         }
 
         private static XElement ProcessTextRun(XElement runElement, FieldRecognizer recognizer,
