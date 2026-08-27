@@ -230,6 +230,116 @@ namespace OpenDocxTemplater.Tests
                 () => Templater.ParseFieldsToDict(result.ExtractedFields));
         }
 
+        [Fact]
+        public void CompileTemplate_ReportsRunLevelElseOutsideIfInsteadOfThrowingStackEmpty()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Paragraph(
+                            new Wp.SdtRun(
+                                new Wp.SdtProperties(new Wp.SdtAlias { Val = "Unrelated content control" }),
+                                new Wp.SdtContentRun(
+                                    CreateNormalizedFieldControl("1", "[if isMember]"))),
+                            new Wp.Run(new Wp.Text("member")),
+                            CreateNormalizedFieldControl("2", "[else]"),
+                            new Wp.Run(new Wp.Text("entity")),
+                            CreateNormalizedFieldControl("3", "[endif]"))));
+                main.Document.Save();
+            }
+
+            var fieldDict = new Dictionary<string, ParsedField>
+            {
+                ["1"] = new ParsedField { Type = FieldType.If, Expression = "isMember", Atom = "C1" },
+                ["2"] = new ParsedField { Type = FieldType.Else },
+                ["3"] = new ParsedField { Type = FieldType.EndIf },
+            };
+            var transformResult = Templater.CompileTemplate(stream.ToArray(), fieldDict);
+
+            Assert.True(transformResult.HasErrors);
+            Assert.Contains("Field 2 (\"[else]\"): Error: 'else' outside of 'if' / 'endif' at run level",
+                transformResult.Errors);
+        }
+
+        private static Wp.SdtRun CreateNormalizedFieldControl(string id, string text)
+        {
+            return new Wp.SdtRun(
+                new Wp.SdtProperties(new Wp.Tag { Val = id }),
+                new Wp.SdtContentRun(new Wp.Run(new Wp.Text(text))));
+        }
+
+        [Fact]
+        public void NormalizeTemplate_UnwrapsInlineContentControlAroundSingleTextDelimField()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Paragraph(
+                            new Wp.SdtRun(
+                                new Wp.SdtProperties(new Wp.SdtAlias { Val = "Unrelated content control" }),
+                                new Wp.SdtContentRun(
+                                    new Wp.Run(new Wp.Text(" ")),
+                                    new Wp.Run(new Wp.Text("{[if isMember]}")),
+                                    new Wp.Run(new Wp.Text(" ")))),
+                            new Wp.Run(new Wp.Text("member")),
+                            new Wp.Run(new Wp.Text("{[else]}")),
+                            new Wp.Run(new Wp.Text("entity")),
+                            new Wp.Run(new Wp.Text("{[endif]}")))));
+                main.Document.Save();
+            }
+
+            var normalizeResult = FieldExtractor.NormalizeTemplate(
+                stream.ToArray(), removeCustomProperties: false);
+            var fieldDict = Templater.ParseFieldsToDict(normalizeResult.ExtractedFields);
+            var transformResult = Templater.CompileTemplate(
+                normalizeResult.NormalizedTemplate, fieldDict);
+
+            Assert.False(transformResult.HasErrors,
+                string.Join('\n', transformResult.Errors ?? Array.Empty<string>()));
+            Assert.Contains("\"content\":\"if isMember\"", normalizeResult.ExtractedFields);
+            Assert.Contains("\"content\":\"else\"", normalizeResult.ExtractedFields);
+            Assert.Contains("\"content\":\"endif\"", normalizeResult.ExtractedFields);
+            using var normalizedDocument = WordprocessingDocument.Open(
+                new MemoryStream(normalizeResult.NormalizedTemplate), false);
+            Assert.DoesNotContain(normalizedDocument.MainDocumentPart.Document
+                .Descendants<Wp.SdtAlias>(), alias => alias.Val == "Unrelated content control");
+        }
+
+        [Fact]
+        public void NormalizeTemplate_LeavesContentControlWithAdditionalTextAlone()
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var main = document.AddMainDocumentPart();
+                main.Document = new Wp.Document(
+                    new Wp.Body(
+                        new Wp.Paragraph(
+                            new Wp.SdtRun(
+                                new Wp.SdtProperties(new Wp.SdtAlias { Val = "Unrelated content control" }),
+                                new Wp.SdtContentRun(
+                                    new Wp.Run(new Wp.Text("Label: {[CompanyName]}")))))));
+                main.Document.Save();
+            }
+
+            var normalizeResult = FieldExtractor.NormalizeTemplate(
+                stream.ToArray(), removeCustomProperties: false);
+
+            using var normalizedDocument = WordprocessingDocument.Open(
+                new MemoryStream(normalizeResult.NormalizedTemplate), false);
+            Assert.Contains(normalizedDocument.MainDocumentPart.Document
+                .Descendants<Wp.SdtAlias>(), alias => alias.Val == "Unrelated content control");
+        }
+
         [Theory]
         [InlineData("MissingEndIfPara.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]
         [InlineData("MissingEndIfRun.docx", "Field 1 (\"if A\"): The 'If' does not have a matching 'EndIf'")]

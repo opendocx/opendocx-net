@@ -337,7 +337,7 @@ namespace OpenDocx
                         }
                         else if (c.Name == OD.EndList)
                         {
-                            if (stack.Pop() != OD.List)
+                            if (stack.Count == 0 || stack.Pop() != OD.List)
                                 return CreateContextErrorMessage(element, c, "Error: Mismatched 'list' / 'endlist' at run level", te);
                         }
                         else if (c.Name == OD.If)
@@ -346,17 +346,17 @@ namespace OpenDocx
                         }
                         else if (c.Name == OD.ElseIf)
                         {
-                            if (stack.Peek() != OD.If)
+                            if (stack.Count == 0 || stack.Peek() != OD.If)
                                 return CreateContextErrorMessage(element, c, "Error: 'elseif' outside of 'if' / 'endif' at run level", te);
                         }
                         else if (c.Name == OD.Else)
                         {
-                            if (stack.Peek() != OD.If)
+                            if (stack.Count == 0 || stack.Peek() != OD.If)
                                 return CreateContextErrorMessage(element, c, "Error: 'else' outside of 'if' / 'endif' at run level", te);
                         }
                         else if (c.Name == OD.EndIf)
                         {
-                            if (stack.Pop() != OD.If)
+                            if (stack.Count == 0 || stack.Pop() != OD.If)
                                 return CreateContextErrorMessage(element, c, "Error: Mismatched 'if' / 'endif' at run level", te);
                         }
                     }

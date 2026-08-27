@@ -294,6 +294,7 @@ namespace OpenDocx
         private static XElement ProcessParagraphContent(XElement element, FieldRecognizer recognizer,
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
+            element = UnwrapInlineContentControlsAroundSingleTextFields(element, recognizer);
             var paraContents = ExtractTextContent(element);
             if (!paraContents.Contains(recognizer.CombinedBegin))
             {
@@ -305,6 +306,44 @@ namespace OpenDocx
 
             // STEP 2: Now it's easier to use simple tree modification for appropriate run replacement
             return ProcessParagraphWithAlignedRuns(paragraphWithSplitRuns, recognizer, fieldAccumulator, comments);
+        }
+
+        // A normal text-delimited field can be enclosed in a Word content control even though
+        // the control is not itself an OpenDocx field.  For an inline control containing exactly
+        // one complete text field (and optional whitespace), discard only that wrapper so it
+        // cannot split a run-level if/else/endif sequence into separate XML scopes.
+        private static XElement UnwrapInlineContentControlsAroundSingleTextFields(XElement paragraph,
+            FieldRecognizer recognizer)
+        {
+            if (recognizer.ContentControlEmbedding)
+                return paragraph;
+
+            var controls = paragraph.Elements(W.sdt)
+                .Where(control => ContainsSingleTextField(control, recognizer))
+                .ToList();
+            if (controls.Count == 0)
+                return paragraph;
+
+            var result = new XElement(paragraph);
+            foreach (var control in result.Elements(W.sdt)
+                .Where(control => ContainsSingleTextField(control, recognizer))
+                .ToList())
+            {
+                var content = new XElement(control.Element(W.sdtContent));
+                control.ReplaceWith(content.Nodes());
+            }
+            return result;
+        }
+
+        private static bool ContainsSingleTextField(XElement contentControl, FieldRecognizer recognizer)
+        {
+            var content = contentControl.Element(W.sdtContent);
+            if (content == null)
+                return false;
+
+            var text = ExtractTextContent(content).Trim();
+            var match = recognizer.Regex.Match(text);
+            return match.Success && match.Index == 0 && match.Length == text.Length;
         }
 
         private static XElement PreSplitRunsForFields(XElement paragraph, FieldRecognizer recognizer)
