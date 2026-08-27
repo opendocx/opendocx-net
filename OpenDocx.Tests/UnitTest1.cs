@@ -519,13 +519,13 @@ namespace OpenDocxTemplater.Tests
         }
 
         [Theory]
-        [InlineData("inserttestc.docx", "insertedc.docx", false, "inserttestc.xml", "inserttestc-composed.docx")]
-        [InlineData("inserttestd.docx", "insertedc.docx", false, "inserttestc.xml", "inserttestd-composed.docx")]
-        [InlineData("insertteste.docx", "insertede.docx", false, "inserttestc.xml", "insertteste-composed.docx")]
-        [InlineData("insertteste.docx", "insertedf.docx", false, "inserttestc.xml", "inserttestf-composed.docx")]
-        [InlineData("DC-Main2SectInsIndirect.docx", "DC-MarginConditional.docx", true, "InsertKeepSectionsTest.xml", "insertkeepsections-composed.docx")]
-        [InlineData("inserr0.docx", "inserr1.docx", false, "inserr.xml", "inserr-composed.docx")]
-        public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName)
+        [InlineData("inserttestc.docx", "insertedc.docx", false, "inserttestc.xml", "inserttestc-composed.docx", 0)]
+        [InlineData("inserttestd.docx", "insertedc.docx", false, "inserttestc.xml", "inserttestd-composed.docx", 2)]
+        [InlineData("insertteste.docx", "insertede.docx", false, "inserttestc.xml", "insertteste-composed.docx", 0)]
+        [InlineData("insertteste.docx", "insertedf.docx", false, "inserttestc.xml", "inserttestf-composed.docx", 0)]
+        [InlineData("DC-Main2SectInsIndirect.docx", "DC-MarginConditional.docx", true, "InsertKeepSectionsTest.xml", "insertkeepsections-composed.docx", 0)]
+        [InlineData("inserr0.docx", "inserr1.docx", false, "inserr.xml", "inserr-composed.docx", 0)]
+        public async Task ComposeDocument(string name, string insert, bool keepsections, string data, string outName, int expectedRepeatedChildCount)
         {
             var mainData = GetTestXmlData(data);
             List<DocxSource> sources = new List<DocxSource>()
@@ -539,6 +539,55 @@ namespace OpenDocxTemplater.Tests
                 GetTestOutput(outName),
                 sources);
             Assert.True(result3.Bytes.Length > 0);
+            if (expectedRepeatedChildCount > 0)
+            {
+                using var resultStream = new MemoryStream(result3.Bytes);
+                using var resultDocument = WordprocessingDocument.Open(resultStream, false);
+                var resultXml = resultDocument.MainDocumentPart.GetXDocument();
+                Assert.Equal(expectedRepeatedChildCount,
+                    resultXml.Descendants(W.t).Count(text => text.Value == "This is an inserted template, "));
+                Assert.Empty(resultXml.Descendants(PtOpenXml.Insert));
+            }
+        }
+
+        [Fact]
+        public void ComposeDocument_ReusesOneIndirectSourceForMultipleMatchingInsertIds()
+        {
+            const string insertId = "same-child";
+            const string childMarker = "Repeated child marker";
+            var parent = CreateSimpleDocument("first placeholder", "second placeholder");
+
+            using (var stream = new MemoryStream())
+            {
+                stream.Write(parent.DocumentByteArray, 0, parent.DocumentByteArray.Length);
+                stream.Position = 0;
+                using (var document = WordprocessingDocument.Open(stream, true))
+                {
+                    var xDoc = document.MainDocumentPart.GetXDocument();
+                    var paragraphs = xDoc.Root.Element(W.body).Elements(W.p).ToList();
+                    Assert.Equal(2, paragraphs.Count);
+                    foreach (var paragraph in paragraphs)
+                    {
+                        paragraph.ReplaceWith(new XElement(PtOpenXml.Insert,
+                            new XAttribute("Id", insertId)));
+                    }
+                    document.MainDocumentPart.PutXDocument();
+                }
+                parent.DocumentByteArray = stream.ToArray();
+            }
+
+            var sources = new List<OpenXmlPowerTools.DocumentBuilder.Source>
+            {
+                new(parent),
+                new(CreateSimpleDocument(childMarker), insertId),
+            };
+            var result = OpenXmlPowerTools.DocumentBuilder.DocumentBuilder.BuildDocument(sources);
+
+            using var resultStream = new MemoryStream(result.DocumentByteArray);
+            using var resultDocument = WordprocessingDocument.Open(resultStream, false);
+            var resultXml = resultDocument.MainDocumentPart.GetXDocument();
+            Assert.Equal(2, resultXml.Descendants(W.t).Count(text => text.Value == childMarker));
+            Assert.Empty(resultXml.Descendants(PtOpenXml.Insert));
         }
 
         [Theory]
@@ -845,6 +894,21 @@ namespace OpenDocxTemplater.Tests
             }
 
             return false;
+        }
+
+        private static WmlDocument CreateSimpleDocument(params string[] paragraphs)
+        {
+            using var stream = new MemoryStream();
+            using (var document = WordprocessingDocument.Create(
+                stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var mainPart = document.AddMainDocumentPart();
+                mainPart.Document = new Wp.Document(new Wp.Body(
+                    paragraphs.Select(text => new Wp.Paragraph(
+                        new Wp.Run(new Wp.Text(text))))));
+                mainPart.Document.Save();
+            }
+            return new WmlDocument(new OpenXmlPowerToolsDocument(stream.ToArray()));
         }
 
         private static void CreateDocxWithInvalidMcIgnorablePrefix(string outputPath)
