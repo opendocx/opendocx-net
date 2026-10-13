@@ -167,7 +167,7 @@ namespace OpenDocxTemplater.Tests
         }
 
         [Fact]
-        public void NormalizeTemplate_TreatsIfBeforeDrawingAsBlockLevel()
+        public void NormalizeTemplate_DoesNotPromoteIfBeforeNonTextContent()
         {
             using var stream = new MemoryStream();
             using (var document = WordprocessingDocument.Create(
@@ -189,16 +189,9 @@ namespace OpenDocxTemplater.Tests
             var part = Assert.IsType<JsonArray>(Assert.Single(extracted));
 
             Assert.Equal(2, part.Count);
-            Assert.All(part, item => Assert.IsType<JsonObject>(item));
-
-            var fieldDict = Templater.ParseFieldsToDict(result.ExtractedFields);
-            var transformResult = Templater.CompileTemplate(result.NormalizedTemplate, fieldDict);
-            Assert.False(transformResult.HasErrors, string.Join('\n', transformResult.Errors ?? Array.Empty<string>()));
-
-            using var transformed = WordprocessingDocument.Open(
-                new MemoryStream(transformResult.Bytes), false);
-            Assert.NotNull(transformed.MainDocumentPart?.Document.Body
-                .Descendants<Wp.Drawing>().FirstOrDefault());
+            Assert.IsType<JsonArray>(part[0]);
+            Assert.IsType<JsonObject>(part[1]);
+            Assert.Throws<FieldParseException>(() => Templater.ParseFieldsToDict(result.ExtractedFields));
         }
 
         [Fact]
