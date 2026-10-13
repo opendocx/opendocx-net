@@ -61,6 +61,27 @@ namespace OpenDocx
         public static NormalizeResult NormalizeTemplate(byte[] templateBytes, bool removeCustomProperties = true,
             IEnumerable<string> keepPropertyNames = null, string fieldDelimiters = null, bool contentControls = false)
         {
+            var result = AnalyzeTemplate(templateBytes, removeCustomProperties, keepPropertyNames, fieldDelimiters, contentControls);
+            ThrowOnDiagnostics(result);
+            return result;
+        }
+
+        /// <summary>
+        /// Normalize and extract in memory, returning image diagnostics without rejecting
+        /// the template. Used by audits of existing templates and by provisioning.
+        /// Does not parse field pairs, compile, or write any files.
+        /// </summary>
+        public static NormalizeResult AnalyzeTemplate(byte[] templateBytes, bool removeCustomProperties = false,
+            IEnumerable<string> keepPropertyNames = null, string fieldDelimiters = null, bool contentControls = false)
+        {
+            return AnalyzeTemplateCore(templateBytes, removeCustomProperties, keepPropertyNames,
+                fieldDelimiters, contentControls, includeNormalizedTemplate: true);
+        }
+
+        private static NormalizeResult AnalyzeTemplateCore(byte[] templateBytes, bool removeCustomProperties,
+            IEnumerable<string> keepPropertyNames, string fieldDelimiters, bool contentControls,
+            bool includeNormalizedTemplate)
+        {
             var fieldAccumulator = new FieldAccumulator();
             var recognizer = FieldRecognizer.Default;
             OpenSettings openSettings = new OpenSettings();
@@ -88,7 +109,9 @@ namespace OpenDocx
                 using (var sw = new StringWriter())
                 {
                     fieldAccumulator.JsonSerialize(sw);
-                    return new NormalizeResult(mem.ToArray(), sw.ToString());
+                    // Extraction-only callers do not need a copy of the completed DOCX.
+                    return new NormalizeResult(includeNormalizedTemplate ? mem.ToArray() : Array.Empty<byte>(),
+                        sw.ToString(), fieldAccumulator.Diagnostics.AsReadOnly());
                 }
             }
         }
@@ -96,27 +119,16 @@ namespace OpenDocx
         public static string ExtractFieldsOnly(byte[] docxBytes, string fieldDelimiters = null,
             bool contentControls = false)
         {
-            var fieldAccumulator = new FieldAccumulator();
-            var recognizer = FieldRecognizer.Default;
-            OpenSettings openSettings = new OpenSettings();
-            if (!string.IsNullOrWhiteSpace(fieldDelimiters) || contentControls)
-            {
-                recognizer = new FieldRecognizer(fieldDelimiters ?? "[]", contentControls ? "cc" : null);
-            }
-            using (MemoryStream mem = new MemoryStream())
-            {
-                mem.Write(docxBytes, 0, docxBytes.Length); // copy template bytes into memory stream
-                using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(mem, true, openSettings)) // read & parse those bytes into OXML document (also in memory)
-                {
-                    // next, extract all fields (and thus logic) from the template's content parts
-                    ExtractAllTemplateFields(wordDoc, recognizer, fieldAccumulator, false, false, null);
-                }
-            }
-            using (var sw = new StringWriter())
-            {
-                fieldAccumulator.JsonSerialize(sw);
-                return sw.ToString();
-            }
+            var result = AnalyzeTemplateCore(docxBytes, false, null, fieldDelimiters, contentControls,
+                includeNormalizedTemplate: false);
+            ThrowOnDiagnostics(result);
+            return result.ExtractedFields;
+        }
+
+        private static void ThrowOnDiagnostics(NormalizeResult result)
+        {
+            if (result.Diagnostics.Count > 0)
+                throw new FieldParseException(string.Join("\n", result.Diagnostics.Select(d => d.ToString())));
         }
 
         private static void ExtractAllTemplateFields(WordprocessingDocument wordDoc, FieldRecognizer recognizer,
@@ -183,6 +195,7 @@ namespace OpenDocx
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
             XDocument xDoc = part.GetXDocument();
+            fieldAccumulator.PartUri = part.Uri.ToString();
             fieldAccumulator.BeginBlock();
             var xDocRoot = (XElement)IdentifyAndNormalizeFields(xDoc.Root, recognizer, fieldAccumulator, comments);
             fieldAccumulator.EndBlock();
@@ -204,6 +217,7 @@ namespace OpenDocx
                 {
                     fieldAccumulator.BeginBlock();
                     var transformedPara = ProcessParagraphContent(element, recognizer, fieldAccumulator, comments);
+                    fieldAccumulator.CheckParagraphImages(element);
                     fieldAccumulator.EndBlock(promoteSingleField: true);
                     return transformedPara;
                 }
@@ -275,6 +289,7 @@ namespace OpenDocx
                             }
                         }
                         var fieldId = fieldAccumulator.AddField(ccContents);
+                        fieldAccumulator.CheckBlockControlImages(element, fieldId, ccContents);
                         tagElem.SetAttributeValue(W.val, fieldId);
                         newCC.Add(element.Nodes());
                         return newCC;
@@ -557,26 +572,12 @@ namespace OpenDocx
             if (fieldReplacements.Count == 1)
             {
                 var fld = fieldReplacements[0].match;
-                var before = paraContents[..fld.Index];
-                var after = paraContents[(fld.Index + fld.Length)..];
-                if (!string.IsNullOrWhiteSpace(before))
-                {
+                var classificationText = paragraph.DescendantsTrimmed(W.txbxContent)
+                    .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
+                    .Select(ParagraphImages.ClassificationText).StringConcatenate();
+                if (!string.IsNullOrWhiteSpace(classificationText[..fld.Index]) ||
+                    !string.IsNullOrWhiteSpace(classificationText[(fld.Index + fld.Length)..]))
                     fieldAccumulator.RegisterNonFieldContentInBlock();
-                }
-                else if (!string.IsNullOrWhiteSpace(after))
-                {
-                    // UnicodeMapper represents non-text run children (including drawings)
-                    // with U+0001.  If the only content after the field is whitespace and
-                    // those markers, confirm that the markers represent supported graphic
-                    // content before allowing block-level promotion.
-                    var afterWithoutNonTextMarkers = after.Replace(
-                        UnicodeMapper.StartOfHeading.ToString(), String.Empty);
-                    if (!string.IsNullOrWhiteSpace(afterWithoutNonTextMarkers)
-                        || !ContainsGraphic(paragraph))
-                    {
-                        fieldAccumulator.RegisterNonFieldContentInBlock();
-                    }
-                }
             }
 
             // Apply XML replacements in reverse order to avoid position shifts
@@ -685,20 +686,11 @@ namespace OpenDocx
                 .StringConcatenate();
         }
 
-        private static bool ContainsGraphic(XElement paragraph)
-        {
-            return paragraph
-                .DescendantsTrimmed(W.txbxContent)
-                .Where(d => d.Name == W.r && (d.Parent == null || d.Parent.Name != W.del))
-                .Any(r => !r.Elements(W.t).Any()
-                    && (r.Descendants(W.drawing).Any() || r.Descendants(W.pict).Any())
-                    && !r.Descendants(W.t).Any(t => !string.IsNullOrWhiteSpace((string)t)));
-        }
-
         private static XElement ProcessTextRun(XElement runElement, FieldRecognizer recognizer,
             FieldAccumulator fieldAccumulator, CommentReader comments)
         {
-            if (runElement.Elements(W.t).Any(t => !string.IsNullOrWhiteSpace((string)t)))
+            if (runElement.Elements(W.t).Any(t => !string.IsNullOrWhiteSpace((string)t)) ||
+                runElement.Elements().Any(ParagraphImages.IsInline))
             {
                 // apparently, spaces and non-text outside of a field will (in at least some cases?)
                 // get ignored in assembly, even for block-level if's, so we only note non-spaces.
@@ -712,25 +704,9 @@ namespace OpenDocx
 
         private static string RunToString(XElement r)
         {
-            if (RunIsVisible(r))
+            if (ParagraphImages.RunIsVisible(r))
                 return UnicodeMapper.RunToString(r);
             return string.Empty;
-        }
-
-        private static readonly HashSet<XName> Invisibles = new() {
-            W.rPr,
-            W.fldChar,
-            W.instrText,
-            W.lastRenderedPageBreak,
-        };
-
-        static Boolean RunIsVisible(XElement r)
-        {
-            // If it has any <w:t>, it's visible (fast, common case)
-            if (r.Elements(W.t).Any())
-                return true;
-            // Otherwise: it's visible unless it contains ONLY invisibles
-            return !r.Elements().All(e => Invisibles.Contains(e.Name));
         }
 
         static XElement CCTWrap(string tag, params object[] content) =>

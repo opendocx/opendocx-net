@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
+using OpenXmlPowerTools;
 
 namespace OpenDocx
 {
@@ -8,6 +11,24 @@ namespace OpenDocx
     {
         private Stack<FieldBlock> blocks;
         private int fieldCount;
+        internal string PartUri { get; set; }
+        internal List<TemplateDiagnostic> Diagnostics { get; } = new();
+
+        internal void CheckParagraphImages(XElement paragraph)
+        {
+            var block = blocks.Peek();
+            if (block.FieldCount == 1 && !block.HasOtherContent &&
+                block.GetItem(0) is FieldInfo field && ParagraphImages.HasFloating(paragraph))
+                Diagnostics.Add(new TemplateDiagnostic(field.id, field.content, PartUri));
+        }
+
+        internal void CheckBlockControlImages(XElement control, string fieldId, string fieldText)
+        {
+            if (control.Elements(W.sdtContent)
+                .SelectMany(content => content.DescendantsTrimmed(W.txbxContent))
+                .Any(e => e.Name == W.p && ParagraphImages.HasFloating(e)))
+                Diagnostics.Add(new TemplateDiagnostic(fieldId, fieldText, PartUri));
+        }
 
         public FieldAccumulator()
         {

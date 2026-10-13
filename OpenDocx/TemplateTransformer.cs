@@ -241,6 +241,7 @@ namespace OpenDocx
         }
 
         private static XName[] s_MetaToForceToBlock = new XName[] {
+            OD.Content,
             OD.If,
             OD.ElseIf,
             OD.Else,
@@ -269,9 +270,24 @@ namespace OpenDocx
                     if (childMeta.Count() == 1)
                     {
                         var child = childMeta.First();
-                        var otherTextInParagraph = element.Elements(W.r).Elements(W.t).Select(t => (string)t).StringConcatenate().Trim();
-                        if (otherTextInParagraph != "")
+                        // Keep existing content-field output when there are no
+                        // anchors. Only the unsupported anchored case needs promotion.
+                        if (child.Name == OD.Content && !ParagraphImages.HasFloating(element))
+                            return new XElement(element.Name, element.Attributes(),
+                                element.Nodes().Select(n => ForceBlockLevelAsAppropriate(n, te)));
+                        // Preserve the existing treatment of non-image constructs.
+                        var hasImages = element.DescendantsTrimmed(W.txbxContent)
+                            .Any(e => e.Name == W.drawing || e.Name == W.pict);
+                        var otherContent = hasImages
+                            ? element.DescendantsTrimmed(W.txbxContent)
+                                .Where(e => e.Name == W.r && !e.Ancestors().Contains(child))
+                                .Select(ParagraphImages.ClassificationText).StringConcatenate()
+                            : element.Elements(W.r).Elements(W.t).Select(t => (string)t).StringConcatenate();
+                        if (!string.IsNullOrWhiteSpace(otherContent))
                         {
+                            if (child.Name == OD.Content)
+                                return new XElement(element.Name, element.Attributes(),
+                                    element.Nodes().Select(n => ForceBlockLevelAsAppropriate(n, te)));
                             var newPara = new XElement(element);
                             var newMeta = newPara.Elements().Where(n => s_MetaToForceToBlock.Contains(n.Name)).First();
                             string errorMessage = string.Format("Error: The '{0}' must either be in the same paragraph as its matching {1}, or in a paragraph by itself.", child.Name.LocalName.ToLower(), s_MatchingFieldNames[child.Name]);
@@ -279,46 +295,8 @@ namespace OpenDocx
                             return newPara;
                         }
                         // force single metadata up to block level
-                        var nonMetadataNodes = element.Nodes()
-                            .Where(n => n != child && !(n is XElement e && e.Name == W.pPr))
-                            .ToList();
-                        var childPosition = element.Nodes().ToList().IndexOf(child);
-                        var graphicBeforeMetadata = element.Nodes()
-                            .Take(childPosition)
-                            .OfType<XElement>()
-                            .Any(ContainsGraphic);
-
-                        if (graphicBeforeMetadata)
-                        {
-                            var newPara = new XElement(element);
-                            var newMeta = newPara.Elements()
-                                .First(n => s_MetaToForceToBlock.Contains(n.Name));
-                            var errorMessage = string.Format(
-                                "Error: The '{0}' cannot follow graphic content in the same paragraph when promoted to block level.",
-                                child.Name.LocalName.ToLower());
-                            newMeta.ReplaceWith(CreateRunErrorMessage(child, errorMessage, te));
-                            return newPara;
-                        }
-
-                        // A graphic-only paragraph needs to become content between the
-                        // block-level start and end markers.  Keeping it inside the
-                        // metadata would cause NormalizeRepeatAndConditional to remove
-                        // it while it builds that range.
-                        var hasGraphicAfterMetadata = nonMetadataNodes
-                            .OfType<XElement>()
-                            .Any(ContainsGraphic);
-                        if (hasGraphicAfterMetadata)
-                        {
-                            return new List<object>
-                            {
-                                new XElement(child.Name, child.Attributes()),
-                                new XElement(W.p,
-                                    element.Attributes(),
-                                    element.Elements(W.pPr),
-                                    nonMetadataNodes)
-                            };
-                        }
-
+                        // Floating objects do not turn a marker paragraph into content.
+                        // Its anchors disappear with the replaced/removed paragraph.
                         var meta = new XElement(child.Name,
                             child.Attributes(),
                             new XElement(W.p,
@@ -369,11 +347,6 @@ namespace OpenDocx
                     element.Nodes().Select(n => ForceBlockLevelAsAppropriate(n, te)));
             }
             return node;
-        }
-
-        private static bool ContainsGraphic(XElement element)
-        {
-            return element.Descendants(W.drawing).Any() || element.Descendants(W.pict).Any();
         }
 
         // The following method is written using tree modification, not RPFT, because it is easier to write in this fashion.

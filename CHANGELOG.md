@@ -8,13 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- `Normalizer.AnalyzeTemplate` returns structured floating-image diagnostics for reuse in audits of existing templates, without parsing field pairs or writing files.
 
 ### Changed
-- 
+- Inline images count as paragraph content on either side of a field, in both text-delimited and content-control templates. This can make formerly block-level paired fields run-level, requiring their matching fields to be in the same paragraph. Floating images do not count as paragraph content when determining block/run classification.
+- `Normalizer.NormalizeTemplate` rejects floating images anchored to block-field paragraphs, including content fields, with `FieldParseException`. `Normalizer.ExtractFieldsOnly`, `Normalizer.ExtractFields`, `OpenDocx.NormalizeDocx`, and `OpenDocx.PrepareTemplate` inherit this rejection. Structured diagnostics from `AnalyzeTemplate` identify the field, expression, and document part; thrown messages include the field ID, expression, and message.
 
 ### Fixed
-- 
+- Compilation removes anchors with their block-field paragraph instead of moving the image to a separate paragraph. Inline images remain in the text flow.
+- Legacy VML pictures inherit floating-position classification from their enclosing VML groups.
+- Mixed floating/inline VML pictures still count as paragraph content, while their floating shapes are detected when validating block-level field controls.
+- `Normalizer.ExtractFieldsOnly` shares normalization and validation without allocating a discarded copy of the normalized DOCX bytes.
 
 ## [1.1.4] - 2026-06-18
 
