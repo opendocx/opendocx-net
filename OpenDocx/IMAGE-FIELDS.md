@@ -1,4 +1,9 @@
-# Images and template fields
+# Images, floating objects, and template fields
+
+Diagnostics refer to floating objects, including pictures, text boxes, and shapes.
+The existing `FloatingImageOnBlockField` diagnostic code is retained for compatibility.
+DrawingML anchor detection applies regardless of the type of drawing inside it;
+the rules below also apply to text boxes and shapes recognized as floating.
 
 An inline picture is content in the paragraph's text flow. It counts as content
 on either side of a field, just as ordinary text does. A field with an inline

@@ -114,7 +114,7 @@ namespace OpenDocxTemplater.Tests
                 Assert.IsType<JsonObject>(Assert.Single(part));
                 Assert.Single(Root(analysis.NormalizedTemplate).Descendants(WP.anchor));
                 var error = Assert.Throws<FieldParseException>(() => Normalizer.NormalizeTemplate(bytes, false, contentControls: controls));
-                Assert.Contains("floating image", error.Message);
+                Assert.Contains("floating object (such as a picture, text box, or shape)", error.Message);
                 Assert.Contains(text, error.Message);
                 var extractionError = Assert.Throws<FieldParseException>(() => Normalizer.ExtractFieldsOnly(bytes, contentControls: controls));
                 Assert.Equal(error.Message, extractionError.Message);

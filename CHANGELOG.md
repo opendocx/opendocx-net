@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Floating-object diagnostics now refer to pictures, text boxes, and shapes rather than calling every object an image. The diagnostic code remains `FloatingImageOnBlockField`; detection and assembly behavior are unchanged.
+
+## [1.1.7] - 2026-10-13
+
 ### Added
-- `Normalizer.AnalyzeTemplate` returns structured floating-image diagnostics for reuse in audits of existing templates, without parsing field pairs or writing files.
+- `Normalizer.AnalyzeTemplate` returns structured `FloatingImageOnBlockField` diagnostics via `NormalizeResult.Diagnostics` for reuse in audits of existing templates, without parsing field pairs or writing files.
 
 ### Changed
 - Inline images count as paragraph content on either side of a field, in both text-delimited and content-control templates. This can make formerly block-level paired fields run-level, requiring their matching fields to be in the same paragraph. Floating images do not count as paragraph content when determining block/run classification.
@@ -19,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy VML pictures inherit floating-position classification from their enclosing VML groups.
 - Mixed floating/inline VML pictures still count as paragraph content, while their floating shapes are detected when validating block-level field controls.
 - `Normalizer.ExtractFieldsOnly` shares normalization and validation without allocating a discarded copy of the normalized DOCX bytes.
+
+## [1.1.6] - 2026-07-31
+
+### Changed
+- Allowed graphics following a block-level conditional or list field in the same paragraph. Compilation preserves the graphic in a separate content paragraph. Graphics preceding the field still prevent block-level classification. This behavior is superseded by the image classification and validation rules in 1.1.7.
+
+## [1.1.5] - 2026-07-22
+
+### Fixed
+- Preserved table-cell boundaries when a cell contains only a single field, so paired fields in different cells are correctly rejected instead of being treated as sharing a container.
 
 ## [1.1.4] - 2026-06-18
 
@@ -80,7 +95,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Field extraction and replacement
 - Comment management utilities
 
-[Unreleased]: https://github.com/opendocx/opendocx-net/compare/v1.1.4...HEAD
+[Unreleased]: https://github.com/opendocx/opendocx-net/compare/d606f3fa4424c374f58dcb2d7ec599ac2714191d...HEAD
+[1.1.7]: https://github.com/opendocx/opendocx-net/compare/df2abf3cb43565ade1afbdf8b2b12787fbde49cf...d606f3fa4424c374f58dcb2d7ec599ac2714191d
+[1.1.6]: https://github.com/opendocx/opendocx-net/compare/v1.1.5...df2abf3cb43565ade1afbdf8b2b12787fbde49cf
+[1.1.5]: https://github.com/opendocx/opendocx-net/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/opendocx/opendocx-net/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/opendocx/opendocx-net/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/opendocx/opendocx-net/compare/v1.1.1...v1.1.2
