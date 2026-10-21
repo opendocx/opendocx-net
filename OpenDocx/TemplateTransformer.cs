@@ -272,7 +272,8 @@ namespace OpenDocx
                         var child = childMeta.First();
                         // Keep existing content-field output when there are no
                         // anchors. Only the unsupported anchored case needs promotion.
-                        if (child.Name == OD.Content && !ParagraphImages.HasFloating(element))
+                        if (child.Name == OD.Content && (!ParagraphImages.HasFloating(element) ||
+                            FieldPlacement.ContentRequiresRunLevel(element, child)))
                             return new XElement(element.Name, element.Attributes(),
                                 element.Nodes().Select(n => ForceBlockLevelAsAppropriate(n, te)));
                         // Preserve the existing treatment of non-image constructs.

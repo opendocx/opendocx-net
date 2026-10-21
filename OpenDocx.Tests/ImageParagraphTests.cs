@@ -12,7 +12,7 @@ using Xunit;
 
 namespace OpenDocxTemplater.Tests
 {
-    public class ImageParagraphTests
+    public partial class ImageParagraphTests
     {
         private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
         private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";

@@ -13,13 +13,13 @@ This document explains how to publish the OpenDocx package to NuGet.org.
    - Create a new API key with "Push new packages and package versions" scope
    - Copy the generated API key (keep it secure!)
 
-3. **.NET SDK**: Ensure you have .NET 6.0 SDK or later installed.
+3. **.NET SDK**: Ensure you have the .NET 10 SDK installed.
 
 ## Package Information
 
 - **Package ID**: OpenDocx.NET
-- **Current Version**: 1.1.4
-- **Target Framework**: .NET 8.0
+- **Version**: 1.1.8
+- **Target Framework**: .NET 10.0
 - **License**: MPL-2.0
 
 ## Publishing Steps
@@ -47,7 +47,7 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 
 2. Push to NuGet:
    ```bash
-   dotnet nuget push bin/Release/OpenDocx.NET.1.1.4.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
+   dotnet nuget push bin/Release/OpenDocx.NET.1.1.8.nupkg --api-key YOUR_API_KEY_HERE --source https://api.nuget.org/v3/index.json
    ```
 
 ## Package Contents
@@ -55,21 +55,25 @@ This document explains how to publish the OpenDocx package to NuGet.org.
 The generated package includes:
 
 - **Main Assembly**: `OpenDocx.dll` - The core library
-- **Symbol Package**: `OpenDocx.NET.1.1.4.snupkg` - Debug symbols for easier debugging
-- **README**: Package documentation
+- **Symbol Package**: `OpenDocx.NET.1.1.8.snupkg` - Debug symbols for easier debugging
+- **README**: The repository-root `README.md`, included as the canonical package guide
 - **Dependencies**: All referenced NuGet packages are automatically included as dependencies
 
 ## Dependencies
 
 The package has the following dependencies:
 
-- DocumentFormat.OpenXml (>= 3.3.0)
+- DocumentFormat.OpenXml (>= 3.5.1)
 - Newtonsoft.Json (>= 13.0.3)
-- System.IO.Packaging (>= 9.0.1)
-- SkiaSharp (>= 3.119.1)
-- SkiaSharp.NativeAssets.Linux.NoDependencies (>= 3.119.1)
+- System.IO.Packaging (>= 10.0.2)
+- SkiaSharp (>= 4.153.1)
+- SkiaSharp.NativeAssets.Linux.NoDependencies (>= 4.153.1)
 
-Note: OpenXmlPowerTools is bundled directly into this package.
+Note: Packages are created explicitly with `dotnet pack`; ordinary `dotnet build`
+does not regenerate the OpenDocx package. OpenXmlPowerTools is bundled directly
+into this package, so run the pack command above after changing either library.
+Verify that the packaged `lib/net10.0/OpenXmlPowerTools.dll` matches the current
+build before publishing.
 
 ## Version Management
 

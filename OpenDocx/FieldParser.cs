@@ -3,22 +3,12 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace OpenDocx
 {
     internal static class FieldParser
     {
-        private static Regex _ifRE = new(@"^(?:if\b|\?)\s*(.*)$");
-        private static Regex _elseifRE = new(@"^(?:elseif\b|:\?)\s*(.*)$");
-        private static Regex _elseRE = new(@"^(?:else\b|:)(.*)?$");
-        private static Regex _endifRE = new(@"^(?:endif\b|\/\?)(?:.*)$");
-        private static Regex _listRE = new(@"^(?:list\b|#)\s*(.*)$");
-        private static Regex _endlistRE = new(@"^(?:endlist\b|\/#)(.*)$");
-        // private static Regex _curlyquotes = /[“”]/g
-        // private static Regex _zws = /[\u{200B}\u{200C}]/gu
-
         public static List<ParsedField> ParseContentArray(JsonArray contentArray, TemplateErrorList errors = null)
         {
             // contentArray is an array of objects with field text and field IDs (as extracted from a DOCX template)
@@ -73,88 +63,30 @@ namespace OpenDocx
             var contentArrayItem = contentArray[(int)idx];
             var content = contentArrayItem["content"].ToString();
             var fieldId = contentArrayItem["id"].ToString();
-            // parse the field
-            ParsedField node;
-            var match = _ifRE.Match(content);
-            if (match.Success)
-            {
-                node = CreateNode(FieldType.If, match.Groups[1].Value, fieldId);
-                node.ContentArray = ParseContentUntilMatch(contentArray, idx + 1, FieldType.EndIf, node.Number, node.Text, errors);
-                return node;
-            }
-            match = _elseifRE.Match(content);
-            if (match.Success)
-            {
-                node = CreateNode(FieldType.ElseIf, match.Groups[1].Value, fieldId);
+            var match = FieldKindRecognizer.Recognize(content, out var kind);
+            var expression = kind == FieldType.Content ? content.Trim()
+                : kind == FieldType.If || kind == FieldType.ElseIf || kind == FieldType.List ? match.Groups[1].Value : null;
+            var node = CreateNode(kind, expression, fieldId);
+            if (kind == FieldType.If || kind == FieldType.List)
+                node.ContentArray = ParseContentUntilMatch(contentArray, idx + 1,
+                    kind == FieldType.If ? FieldType.EndIf : FieldType.EndList, node.Number, node.Text, errors);
+            else if (kind == FieldType.ElseIf || kind == FieldType.Else)
                 node.ContentArray = new List<ParsedField>();
-                return node;
-            }
-            if (_elseRE.IsMatch(content))
-            {
-                return CreateNode(FieldType.Else, null, fieldId, new List<ParsedField>());
-            }
-            if (_endifRE.IsMatch(content))
-            {
-                return CreateNode(FieldType.EndIf, null, fieldId);
-            }
-            match = _listRE.Match(content);
-            if (match.Success)
-            {
-                node = CreateNode(FieldType.List, match.Groups[1].Value, fieldId);
-                node.ContentArray = ParseContentUntilMatch(contentArray, idx + 1, FieldType.EndList, node.Number, node.Text, errors);
-                return node;
-            }
-            if (_endlistRE.IsMatch(content))
-            {
-                return CreateNode(FieldType.EndList, null, fieldId);
-            }
-            // else
-            return CreateNode(FieldType.Content, content.Trim(), fieldId);
+            return node;
         }
 
         public static ParsedField ParseFieldContent(string content)
         {
             if (string.IsNullOrWhiteSpace(content))
                 return CreateNode(FieldType.Content, "");
-            // parse the content
-            var match = _ifRE.Match(content);
-            if (match.Success)
-                return CreateNode(FieldType.If, match.Groups[1].Value);
-            match = _elseifRE.Match(content);
-            if (match.Success)
-                return CreateNode(FieldType.ElseIf, match.Groups[1].Value);
-            match = _elseRE.Match(content);
-            if (match.Success)
-            {
-                var result = CreateNode(FieldType.Else);
-                var comment = match.Groups[1].Value;
-                if (!string.IsNullOrWhiteSpace(comment))
-                    result.Comment = comment;
-                return result;
-            }
-            match = _endifRE.Match(content);
-            if (match.Success)
-            {
-                var result = CreateNode(FieldType.EndIf);
-                var comment = match.Groups[1].Value;
-                if (!string.IsNullOrWhiteSpace(comment))
-                    result.Comment = comment;
-                return result;
-            }
-            match = _listRE.Match(content);
-            if (match.Success)
-                return CreateNode(FieldType.List, match.Groups[1].Value);
-            match = _endlistRE.Match(content);
-            if (match.Success)
-            {
-                var result = CreateNode(FieldType.EndList);
-                var comment = match.Groups[1].Value;
-                if (!string.IsNullOrWhiteSpace(comment))
-                    result.Comment = comment;
-                return result;
-            }
-            // else
-            return CreateNode(FieldType.Content, content.Trim());
+            var match = FieldKindRecognizer.Recognize(content, out var kind);
+            if (kind == FieldType.Content) return CreateNode(kind, content.Trim());
+            if (kind == FieldType.If || kind == FieldType.ElseIf || kind == FieldType.List)
+                return CreateNode(kind, match.Groups[1].Value);
+            var node = CreateNode(kind);
+            var comment = match.Groups[1].Value;
+            if (!string.IsNullOrWhiteSpace(comment)) node.Comment = comment;
+            return node;
         }
 
         private static List<ParsedField> ParseContentUntilMatch(JsonArray contentArray, uint startIdx, FieldType targetType, uint originId, string originText, TemplateErrorList errors)

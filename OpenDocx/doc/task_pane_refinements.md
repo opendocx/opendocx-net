@@ -286,5 +286,5 @@ public static byte[] EmbedAddIn(
 
 ## 11. Manifest IDs (This Project)
 
-- Default/Knackly: `8eb22e22-73c3-40a5-a8d8-ddae1c07065a`
+- Default: `8eb22e22-73c3-40a5-a8d8-ddae1c07065a`
 - Actionstep: `8eb22e22-73c3-40a5-a8d8-ddae1c07068a`

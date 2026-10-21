@@ -217,7 +217,7 @@ namespace OpenDocx
                 {
                     fieldAccumulator.BeginBlock();
                     var transformedPara = ProcessParagraphContent(element, recognizer, fieldAccumulator, comments);
-                    fieldAccumulator.CheckParagraphImages(element);
+                    fieldAccumulator.CompleteParagraphPlacement(transformedPara);
                     fieldAccumulator.EndBlock(promoteSingleField: true);
                     return transformedPara;
                 }
@@ -586,6 +586,12 @@ namespace OpenDocx
             {
                 ReplaceMatchWithContentControl(newParagraph, match, contentControl);
             }
+            // Outer text-field replacement deliberately skips text-box contents.
+            // Normalize those independent paragraphs too, preserving their nested
+            // extraction scopes and both alternate representations.
+            foreach (var box in newParagraph.DescendantsTrimmed(W.txbxContent)
+                .Where(e => e.Name == W.txbxContent).ToList())
+                box.ReplaceWith(IdentifyAndNormalizeFields(box, recognizer, fieldAccumulator, comments));
             return WordprocessingMLUtil.CoalesceAdjacentRunsWithIdenticalFormatting(newParagraph);
         }
 

@@ -315,7 +315,9 @@ namespace OpenDocxTemplater.Tests
         [InlineData("Married RLT Plain.docx")]
         [InlineData("text_field_formatting.docx")]
         [InlineData("kMANT.docx")]
-        public FieldExtractResult TextExtractFields(string name)
+        public void TextExtractFields(string name) => ExtractTextFields(name);
+
+        private FieldExtractResult ExtractTextFields(string name)
         {
             DirectoryInfo sourceDir = new DirectoryInfo("../../../../test/templates/");
             FileInfo templateDocx = new FileInfo(Path.Combine(sourceDir.FullName, name));
@@ -333,7 +335,7 @@ namespace OpenDocxTemplater.Tests
         [Fact]
         public void RenderedPageBreakMasksDelimiters()
         {
-            var extractResult = TextExtractFields("rend_page_break_in_delim.docx");
+            var extractResult = ExtractTextFields("rend_page_break_in_delim.docx");
             // now read extract field JSON
             string json = File.ReadAllText(extractResult.ExtractedFields);
             var val = Newtonsoft.Json.JsonConvert.DeserializeObject<JArray>(json);
@@ -417,7 +419,7 @@ namespace OpenDocxTemplater.Tests
         [InlineData("HDTrust_RLT.docx", "«»")]
         [InlineData("HDSimple.docx", "«»")]
         //[InlineData("hdwpsymbols.docx", "«»")]
-        public async void FieldExtractorLiteAltSyntaxAsync(string name, string delims)
+        public async Task FieldExtractorLiteAltSyntaxAsync(string name, string delims)
         {
             var bytes = await File.ReadAllBytesAsync(GetTestTemplate(name));
             var json = FieldExtractor.ExtractFieldsOnly(bytes, delims);

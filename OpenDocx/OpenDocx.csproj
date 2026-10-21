@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RootNamespace>OpenDocx</RootNamespace>
@@ -8,10 +8,10 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>OpenDocx.NET</PackageId>
-    <Version>1.1.7</Version>
-    <AssemblyVersion>1.1.7.0</AssemblyVersion>
-    <FileVersion>1.1.7.0</FileVersion>
-    <AssemblyInformationalVersion>1.1.7</AssemblyInformationalVersion>
+    <Version>1.1.8</Version>
+    <AssemblyVersion>1.1.8.0</AssemblyVersion>
+    <FileVersion>1.1.8.0</FileVersion>
+    <AssemblyInformationalVersion>1.1.8</AssemblyInformationalVersion>
     <Authors>OpenDocx</Authors>
     <Company>OpenDocx</Company>
     <Product>OpenDocx.NET</Product>
@@ -25,24 +25,23 @@
     <PackageReleaseNotes>See https://github.com/opendocx/opendocx-net/blob/main/CHANGELOG.md for release notes.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 OpenDocx</Copyright>
     
-    <!-- Enable package generation -->
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <!-- Package output settings (generate packages explicitly with dotnet pack) -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="../README.md" Link="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="System.IO.Packaging" Version="9.0.1" />
+    <PackageReference Include="System.IO.Packaging" Version="10.0.2" />
     
     <!-- OpenXmlPowerTools dependencies - declare explicitly since we bundle OpenXmlPowerTools directly -->
-    <PackageReference Include="SkiaSharp" Version="3.119.1" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\OpenXmlPowerTools\OpenXmlPowerTools\OpenXmlPowerTools.csproj" PrivateAssets="all" />

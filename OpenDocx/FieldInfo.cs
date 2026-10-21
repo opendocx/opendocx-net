@@ -14,11 +14,22 @@ namespace OpenDocx
         internal string PartUri { get; set; }
         internal List<TemplateDiagnostic> Diagnostics { get; } = new();
 
-        internal void CheckParagraphImages(XElement paragraph)
+        internal void CompleteParagraphPlacement(XElement paragraph)
         {
             var block = blocks.Peek();
-            if (block.FieldCount == 1 && !block.HasOtherContent &&
-                block.GetItem(0) is FieldInfo field && ParagraphImages.HasFloating(paragraph))
+            // Fields inside text boxes have their own nested groups. They must not
+            // hide an unsupported anchor on the outer paragraph's sole field.
+            var fields = block.DirectFields.ToList();
+            if (fields.Count != 1) return;
+            var field = fields[0];
+            var control = paragraph.DescendantsTrimmed(W.txbxContent)
+                .FirstOrDefault(e => e.Name == W.sdt &&
+                    (string)e.Element(W.sdtPr)?.Element(W.tag)?.Attribute(W.val) == field.id);
+            if (field.Kind == FieldType.Content && control != null &&
+                !control.Elements(W.sdtContent).Elements(W.p).Any() &&
+                FieldPlacement.ContentRequiresRunLevel(paragraph, control))
+                block.RegisterOtherContent();
+            if (!block.HasOtherContent && ParagraphImages.HasFloating(paragraph))
                 Diagnostics.Add(new TemplateDiagnostic(field.id, field.content, PartUri));
         }
 
@@ -92,6 +103,8 @@ namespace OpenDocx
 
             public int FieldCount { get { return list.Count; } }
 
+            public IEnumerable<FieldInfo> DirectFields => list.OfType<FieldInfo>();
+
             public bool HasOtherContent { get; private set; }
 
             public ExtractedItem GetItem(int index)
@@ -127,10 +140,13 @@ namespace OpenDocx
         {
             public string content { get; }
             public string id { get; }
+            public FieldType Kind { get; }
             public FieldInfo(string fieldContent, string fieldId)
             {
                 content = fieldContent;
                 id = fieldId;
+                FieldKindRecognizer.Recognize(fieldContent, out var kind);
+                Kind = kind;
             }
             public void JsonSerialize(TextWriter sw)
             {
